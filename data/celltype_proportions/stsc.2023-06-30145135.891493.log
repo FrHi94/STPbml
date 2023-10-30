@@ -1,0 +1,9 @@
+[2023-06-30 14:51:36,000 - stsc - INFO ] >> Using device cuda
+[2023-06-30 14:51:36,000 - stsc - INFO ] >> fitting sc data | count file : /home/sami.saarenpaa/liver_franzi/sc/own_ref_subset_cnts.tsv | labels file : /home/sami.saarenpaa/liver_franzi/sc/own_ref_subset_ann.tsv
+[2023-06-30 14:52:00,584 - stsc - INFO ] >> SC data GENES : 4791  SC data CELLS : 3500  SC data TYPES : 14 
+[2023-06-30 17:29:08,336 - stsc - INFO ] >> fit st data section(s) : ['/home/sami.saarenpaa/liver_franzi/visium/V10S29-135_A1_feature_matrix.h5ad', '/home/sami.saarenpaa/liver_franzi/visium/V10S29-135_B1_feature_matrix.h5ad', '/home/sami.saarenpaa/liver_franzi/visium/V10S29-135_C1_feature_matrix.h5ad', '/home/sami.saarenpaa/liver_franzi/visium/V10S29-135_D1_feature_matrix.h5ad']
+[2023-06-30 17:29:33,817 - stsc - INFO ] >> ST data GENES : 60536  ST data SPOTS : 11270 
+[2023-06-30 21:43:04,954 - stsc - INFO ] >> saving proportions for section V10S29-135_A1_feature_matrix to /data/sami-temp/liver_visium_subsample_230630/V10S29-135_A1_feature_matrix/W.2023-06-30145135.891493.tsv
+[2023-06-30 21:43:04,997 - stsc - INFO ] >> saving proportions for section V10S29-135_B1_feature_matrix to /data/sami-temp/liver_visium_subsample_230630/V10S29-135_B1_feature_matrix/W.2023-06-30145135.891493.tsv
+[2023-06-30 21:43:05,035 - stsc - INFO ] >> saving proportions for section V10S29-135_C1_feature_matrix to /data/sami-temp/liver_visium_subsample_230630/V10S29-135_C1_feature_matrix/W.2023-06-30145135.891493.tsv
+[2023-06-30 21:43:05,078 - stsc - INFO ] >> saving proportions for section V10S29-135_D1_feature_matrix to /data/sami-temp/liver_visium_subsample_230630/V10S29-135_D1_feature_matrix/W.2023-06-30145135.891493.tsv

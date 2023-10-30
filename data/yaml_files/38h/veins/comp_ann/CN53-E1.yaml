@@ -1,0 +1,7 @@
+count_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-38h/tsv/norm/inf/CN53_38h_E1_stdata_norm.tsv.gz"
+spot_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-38h/spot_coordinates/spots_CN53_E1.tsv"
+image: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-38h/HE/210326_CN53_Pb_G.C.1_I.C.2_HE_E1_0.1.jpg"
+mask: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-38h/masks/veins_only/computational_annotation/CN53_E1_mask-0.1_compann.jpg"
+rgb:
+  central: [255,0,0]
+  portal: [0,0,255]

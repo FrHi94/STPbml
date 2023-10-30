@@ -1,0 +1,1054 @@
+---
+title: "distance_analysis_pb_ST"
+output: html_document
+date: '2023-01-17'
+---
+
+Now that we have the distances to the regions of interest (parasites as well as inflammation hotspots) we can investigate whether we can observe genes that are correlated with the distance to the region of interest
+
+```{r, define your working directory (path to github repo), results='hide', message=FALSE}
+
+repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas/"
+
+```
+
+
+
+```{r, load libraries, results='hide', message=FALSE}
+
+library(ggplot2)
+library(psych)
+library(ggpubr)
+library(STutility)
+
+```
+
+
+```{r, call funtions, results='hide'}
+
+source(paste0(repo,"scripts/FUNTIONS.R"))
+
+```
+
+```{r, load distances tables, results='hide'}
+
+dist_parasite <- read.table(paste0(repo,"/data/distances/distances_per_spot_parasite.tsv"))
+dist_roi <- read.table(paste0(repo,"/data/distances/distances_per_spot_ROI.tsv"))
+dist_vis_vein <- read.table(paste0( "/data/distances/distances/distances_per_spot_veins.tsv"))
+dist_comp_vein <- read.table(paste0( "/data/distances/distances/distances/distances_per_spot_comp_veins.tsv"))
+
+```
+
+You can retrieve the STUtility object from this zenodo repository and save it to the corresponding folder in the github repository "[PATHTO]/spatiotemporal_Pbliver_atlas/res/Seurat_objects" or generate your own STUtility object using the script "Spatial_analysis_PB"
+
+```{r, load seurat object}
+
+se.pb <- loadRDS(paste0,"/res/Seurat_objects/", "name_of_object") #change the name of your object accordingly
+
+```
+
+```{r, for timepoint specific analysis, results='hide'}
+
+##get data for timepoints and conditions to run expression by distance analysis 
+timepoint <- FetchData(se.pb, vars = "timepoint")
+timepoint$spot <- rownames(timepoint)
+condition <- FetchData(se.pb, vars = "condition")
+condition$spot <- rownames(condition)
+
+
+#subset data based on timepoint 
+se.pb <- SetIdent(se.pb, value = "timepoint")
+
+se.12h <- SubsetSTData(se.pb, expression = timepoint %in% "12h")
+se.24h <- SubsetSTData(se.pb, expression = timepoint %in% "24h")
+se.38h <- SubsetSTData(se.pb, expression = timepoint %in% "38h")
+
+se.pb <- SetIdent(se.pb, value = "seurat_clusters")
+
+```
+
+
+
+```{r, IHS correlation, warning=FALSE, message=FALSE}
+
+cor_IHS <- cor_dist(dist = dist_roi, thrs = 800, object = se.pb) #set threshold as you see fit
+cor_IHS <- subset(cor_IHS,cor_IHS$p.adj < 0.01) #only include significant values 
+cor_IHS
+
+cor_IHS_12h <- cor_dist(dist = dist_roi, thrs = 800, object = se.12h) #Perform timepoint-wise ##Due to small total numbers of identified IHS, we used data for joined objects for interpretations
+
+cor_IHS_12h <- subset(cor_IHS_12h,cor_IHS$p.adj < 0.01)
+tail(cor_IHS_12h)
+
+cor_IHS_24h <- cor_dist(dist = dist_roi, thrs = 800, object = se.24h)
+cor_IHS_24h <- subset(cor_IHS_24h,cor_IHS$p.adj < 0.01)
+tail(cor_IHS_24h)
+
+cor_IHS_38h <- cor_dist(dist = dist_roi, thrs = 800, object = se.38h)
+cor_IHS_38h <- subset(cor_IHS_38h,cor_IHS$p.adj < 0.01)
+tail(cor_IHS_38h)
+
+
+```
+
+
+
+```{r, apply expression by distance to IHS positions, message = FALSE}
+
+cor_IHS <- cor_IHS[cor_IHS$p.adj < 0.01,]
+cor_IHS[1:12,]
+cor_IHS[c(nrow(cor_IHS)-12):nrow(cor_IHS),]
+
+##write table with results
+#write.table(cor_IHS, "/PATH/TO/FOLDER", quote = F, sep = ",", row.names = rownames(cor_IHS), col.names = colnames(cor_IHS)) 
+
+pos_cor_IHS <- expr_by_dist(se.pb,roi_dist = dist_roi,condition = condition, center = "IHS", show.condition = T,seed = rownames(cor_IHS[cor_IHS$correlation_coeficent > 0,]),thrs = 200)
+pos_cor_IHS[[2]]
+
+
+neg_cor_IHS <- expr_by_dist(se.pb,roi_dist = dist_roi, condition = condition, show.condition  = T,seed = rownames(cor_IHS[cor_IHS$correlation_coeficent < 0,])[(nrow(cor_IHS[cor_IHS$correlation_coeficent < 0,])-3):(nrow(cor_IHS[cor_IHS$correlation_coeficent < 0,]))],thrs = 750, center = "IHS", ncol = 2, nrow = 2)
+#pdf("/PATH/TO/FOLDER", width = 10, height = 8)
+neg_cor_IHS[[2]]
+#dev.off()
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/neg_expression_by_dist_IHS.pdf", height = 12, width = 5)
+##12h
+neg_cor_IHS <- expr_by_dist(se.pb,roi_dist = dist_roi, condition = condition, show.condition  = T,seed = rownames(cor_IHS_12h[cor_IHS_12h$correlation_coeficent < 0,])[(nrow(cor_IHS_12h[cor_IHS_12h$correlation_coeficent < 0,])-11):(nrow(cor_IHS_12h[cor_IHS_12h$correlation_coeficent < 0,]))],thrs = 750, center = "IHS", ncol = 3, nrow = 5)
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig2/correlation_by_distances_IHS_12h.pdf")
+neg_cor_IHS[[2]]
+#dev.off()
+
+##24h
+
+neg_cor_IHS <- expr_by_dist(se.pb,roi_dist = dist_roi, condition = condition, show.condition  = T,seed = rownames(cor_IHS_24h[cor_IHS_24h$correlation_coeficent < 0,])[(nrow(cor_IHS_24h[cor_IHS_24h$correlation_coeficent < 0,])-11):(nrow(cor_IHS_24h[cor_IHS_24h$correlation_coeficent < 0,]))],thrs = 750, center = "IHS", ncol = 3, nrow = 5)
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig2/correlation_by_distances_IHS_24h.pdf")
+neg_cor_IHS[[2]]
+#dev.off()
+
+##38h
+neg_cor_IHS <- expr_by_dist(se.pb,roi_dist = dist_roi, condition = condition, show.condition  = T,seed = rownames(cor_IHS_38h[cor_IHS_38h$correlation_coeficent < 0,])[(nrow(cor_IHS_38h[cor_IHS_38h$correlation_coeficent < 0,])-11):(nrow(cor_IHS_38h[cor_IHS_38h$correlation_coeficent < 0,]))],thrs = 750, center = "IHS", ncol = 3, nrow = 5)
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig2/correlation_by_distances_IHS_38h.pdf")
+neg_cor_IHS[[2]]
+#dev.off()
+
+#Run quick go-term analysis to get an idea if these genes show enrichment for a biological process or pathway 
+golysis.tree(rownames(cor_IHS_12h[which(cor_IHS_12h$correlation_coeficent < -0.1),]),source = "REAC", significant = T, nterms = 5)
+
+golysis.tree(rownames(cor_IHS_38h[which(cor_IHS_38h$correlation_coeficent < -0.1),]),source = "REAC", significant = T, nterms = 5)
+
+golysis.tree(rownames(cor_IHS[which(cor_IHS$correlation_coeficent < 0),]),source = "GO:BP", significant = F, nterms = 5)
+
+golysis.tree(rownames(cor_IHS[which(cor_IHS$correlation_coeficent > 0),]),source = "GO:BP", significant = F, nterms = 5)
+
+
+```
+
+```{r, make lollipop plots, message=FALSE}
+
+
+neg_IHS_GO <- gost(query = rownames(cor_IHS[which(cor_IHS$correlation_coeficent < 0),]) , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T)
+
+ggplot(neg_IHS_GO$result[neg_IHS_GO$result$source == "GO:BP",][1:100,], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#FCC981","darkorange"))(100)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("Reactome pathway")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+
+pos_IHS_GO <- na.omit(gost(query = rownames(cor_IHS[which(cor_IHS$correlation_coeficent > 0),]) , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+
+
+ggplot(pos_IHS_GO$result[pos_IHS_GO$result$source == "GO:BP",], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("lightblue","darkblue"))(nrow(pos_IHS_GO$result[pos_IHS_GO$result$source == "GO:BP",]))) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("Reactome pathway")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+
+```
+
+
+```{r, Add module score for inflammation}
+
+se.pb <- AddModuleScore(se.pb, features = list(rownames(cor_IHS_12h[which(cor_IHS_12h$correlation_coeficent < -0.1),])), name = "IHS_module")
+
+ST.FeaturePlot(se.pb, features = "IHS_module1", ncol = 5)
+
+#12h (2,4+5)
+
+FeatureOverlay(se.pb, features = "IHS_module1",sampleids = 1)
+ST.FeaturePlot(se.pb, features = "dist_roi_um", indices = 1)
+
+FeatureOverlay(se.pb, features = "IHS_module1",sampleids = 2,pt.size = 3, pt.alpha = 0.6, cols = colorRampPalette(c("#660156","#21908C", "#FFF68F", "#FFD700"))(1001))
+
+FeatureOverlay(se.pb, features = "IHS_module1",sampleids = 4)
+FeatureOverlay(se.pb, features = "IHS_module1",sampleids = 5)
+
+#24h (18)
+FeatureOverlay(se.pb, features = "IHS_module1",sampleids = 18,pt.size = 3, pt.alpha = 0.6, cols = colorRampPalette(c("#660156","#21908C", "#FFF68F", "#FFD700"))(1001))
+
+ST.FeaturePlot(se.pb, features = "dist_roi_um", indices = 18)
+#38h (35)
+
+FeatureOverlay(se.pb, features = "IHS_module1",sampleids = 35, pt.size = 3, pt.alpha = 0.6, cols = colorRampPalette(c("#660156","#21908C", "#FFF68F", "#FFD700"))(1001))
+
+ST.FeaturePlot(se.pb, features = "dist_roi_um", indices = 35)
+ST.FeaturePlot(se.pb, features = "dist_roi_um", indices = 34)
+
+```
+We can observe that gene expression shows the correlation to the distance in IFHs is primarly explained by the late timepoint and shows differences between the control condition rather than the infected condition, which could either be explained by the delayed inflammatory response and that we missed the correct time point for expression peak (not at 12h or 24h) or somehow by the presence of the parasite in the tissue. 
+
+
+We can do the same analysis for genes correlated to the distance to a parasite
+
+```{r,correlation analysis for distance and gene expression (parasite)}
+
+cor_parasite <- cor_dist(dist = dist_parasite, thrs = 400, object = se.pb)
+cor_parasite <- cor_parasite[cor_parasite$p.adj < 0.01,]
+cor_parasite[c(nrow(cor_parasite)-12):nrow(cor_parasite),]
+
+#look at expression by distance
+
+pos_cor_parasite <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, show.condition = T, center = "parasite", seed = rownames(cor_parasite[cor_parasite$correlation_coeficent > 0,]),thrs = 800)
+pos_cor_parasite[[2]]
+
+neg_cor_parasite <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", ncol = 2, nrow = 2,show.condition  = T,seed = rownames(tail(cor_parasite)[3:6,]),thrs = 800, delta = F)
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig1/expression_by_dist_Pberghei.pdf", width = 20 , height = 10)
+neg_cor_parasite[[2]]
+#dev.off()
+
+##For the parasite analysis it would be interesting to run the correlation analysis with host genes only and see if we find anything significant and stronger correlation coefficient 
+
+#sort for only host genes 
+cor_host_parasite <- cor_parasite[-grep("-pb", rownames(cor_parasite)),]
+
+cor_host_parasite_neg <- cor_host_parasite[cor_host_parasite$correlation_coeficent < 0,]
+  
+neg_cor_host_parasite <- expr_by_dist(se.pb,roi_dist = dist_parasite, center = "parasite", condition = condition, show.condition  = T,seed = rownames(cor_host_parasite_neg),thrs = 400, ncol = 5, nrow = 5)
+neg_cor_host_parasite[[2]]
+
+
+##Make module of + and - correlated genes and plot on the tissue 
+
+
+```
+
+
+
+To run timepoint specific correlation and find genes that are correlated to the parasite distance for each timepoint we run individual correlation analyses
+
+```{r, timepoint specific correlation for the parasite}
+
+#12h 
+
+cor_parasite_12h <- cor_dist(dist = dist_parasite, thrs = 400, object = se.12h)
+cor_parasite_12h <- cor_parasite_12h[cor_parasite_12h$p.adj <= 0.05,] #filter based on p-value
+cor_parasite_12h[c(nrow(cor_parasite_12h)-12):nrow(cor_parasite_12h),] #inspect the most negatively correlated genes
+cor_parasite_12h
+
+##get host specific genes 
+cor_host_parasite_12h <- cor_parasite_12h[-grep("-pb", rownames(cor_parasite_12h)),] # remove 
+cor_host_parasite_12h_neg <- na.omit(cor_host_parasite_12h[cor_host_parasite_12h$correlation_coeficent < 0,])
+cor_host_parasite_12h_neg 
+
+cor_host_parasite_12h_pos <- na.omit(cor_host_parasite_12h[cor_host_parasite_12h$correlation_coeficent > 0,])
+cor_host_parasite_12h_pos 
+
+##plot genes 
+neg_cor_host_parasite_12h <- expr_by_dist(object = se.pb,roi_dist = dist_parasite, center = "parasite", condition = condition, show.condition  = T,seed = rownames(cor_host_parasite_12h_neg[cor_host_parasite_12h_neg$p.adj <= 0.01,])
+                                            #c("Pik3ca", "Tcim", "Gstt2", "Gsta1")
+                                            ,thrs = 400, ncol = 5, nrow = 3)
+
+pos_cor_host_parasite_12h <- expr_by_dist(se.pb,roi_dist = dist_parasite, center = "parasite", condition = condition, show.condition  = T,seed = rownames(cor_host_parasite_12h_pos[cor_host_parasite_12h_pos$p.adj <= 0.01,])
+                                            #c("Pik3ca", "Tcim", "Gstt2", "Gsta1")
+                                            ,thrs = 400, ncol = 5, nrow = 3)
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/12h_host_dist.pdf",width = 12, height = 8)
+neg_cor_host_parasite_12h[[2]]
+#dev.off()
+pos_cor_host_parasite_12h[[2]]
+
+#24h
+cor_parasite_24h <- cor_dist(dist = dist_parasite, thrs = 400, object = se.24h)
+cor_parasite_24h <- cor_parasite_24h[cor_parasite_24h$p.adj <= 0.05,]
+cor_parasite_24h
+cor_parasite_24h[c(nrow(cor_parasite_24h)-12):nrow(cor_parasite_24h),]
+
+##get host specific genes 
+cor_host_parasite_24h <- cor_parasite_24h[-grep("-pb", rownames(cor_parasite_24h)),] # remove 
+cor_host_parasite_24h_neg <- na.omit(cor_host_parasite_24h[cor_host_parasite_24h$correlation_coeficent < 0,])
+cor_host_parasite_24h_neg 
+
+cor_host_parasite_24h_pos <- na.omit(cor_host_parasite_24h[cor_host_parasite_24h$correlation_coeficent > 0,])
+cor_host_parasite_24h_pos 
+
+##plot genes 
+neg_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, center = "parasite",  condition = condition, show.condition  = T,seed = rownames(cor_host_parasite_24h_neg[cor_host_parasite_24h_neg$p.adj <= 0.05,])[1:10],thrs = 400, ncol = 2, nrow = 2)
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/24h_host_dist.pdf",width = 12, height = 8)
+neg_cor_host_parasite_24h[[2]]
+#dev.off()
+
+pos_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, center = "parasite",  condition = condition, show.condition  = T,seed = rownames(cor_host_parasite_24h_pos[cor_host_parasite_24h_pos$p.adj <= 0.05,])[1:10],thrs = 400, ncol = 2, nrow = 2)
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/24h_host_dist.pdf",width = 12, height = 8)
+pos_cor_host_parasite_24h[[2]]
+#dev.off()
+
+#38h
+cor_parasite_38h <- cor_dist(dist = dist_parasite, thrs = 400, object = se.38h)
+cor_parasite_38h <- cor_parasite_38h[cor_parasite_38h$p.adj <= 0.05,]
+cor_parasite_38h[c(nrow(cor_parasite_38h)-12):nrow(cor_parasite_38h),]
+cor_parasite_38h
+
+##get host specific genes 
+cor_host_parasite_38h <- cor_parasite_38h[-grep("-pb", rownames(cor_parasite_38h)),] # remove 
+cor_host_parasite_38h_neg <- na.omit(cor_host_parasite_38h[cor_host_parasite_38h$correlation_coeficent < 0,])
+cor_host_parasite_38h_neg 
+
+cor_host_parasite_38h <- cor_parasite_38h[-grep("-pb", rownames(cor_parasite_38h)),] # remove 
+cor_host_parasite_38h_pos <- na.omit(cor_host_parasite_38h[cor_host_parasite_38h$correlation_coeficent > 0,])
+cor_host_parasite_38h_pos 
+
+##plot genes 
+neg_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            rownames(cor_host_parasite_38h_neg[cor_host_parasite_38h_neg$p.adj <= 0.05,])
+                                            ,thrs = 800, ncol = 2, nrow= 2)
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/38h_host_dist.pdf", width = 12, height = 8)
+neg_cor_host_parasite_38h[[2]]
+#dev.off()
+
+pos_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            rownames(cor_host_parasite_38h_pos[cor_host_parasite_38h_pos$p.adj <= 0.05,])
+                                            ,thrs = 800, ncol = 2, nrow= 2)
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/38h_host_dist.pdf", width = 12, height = 8)
+pos_cor_host_parasite_38h[[2]]
+
+                                          
+
+
+```
+
+```{r, export parasite correlation tables for all timepoints}
+
+##Export correlation for all timepoints: 
+
+write.table(cor_parasite, paste0(repo, "res/correlation_all_parasite_positions.csv"), quote = F, sep = ",", row.names = rownames(cor_parasite), col.names = colnames(cor_parasite))
+
+##all timepoints host only 
+write.table(cor_host_parasite, paste0(repo, "res/correlation_all_parasite_positions_host.csv"), quote = F, sep = ",", row.names = rownames(cor_host_parasite), col.names = colnames(cor_host_parasite))
+
+##12hpi 
+
+write.table(cor_parasite_12h, paste0(repo, "res/correlation_all_parasite_positions_12h.csv"), quote = F, sep = ",", row.names = rownames(cor_parasite_12h), col.names = colnames(cor_parasite_12h))
+#host only
+write.table(cor_host_parasite_12h, paste0(repo, "res/correlation_all_parasite_positions_host_12h.csv"), quote = F, sep = ",", row.names = rownames(cor_host_parasite_12h), col.names = colnames(cor_host_parasite_12h))
+
+##24h
+write.table(cor_parasite_24h, paste0(repo, "res/correlation_all_parasite_positions_24h.csv"), quote = F, sep = ",", row.names = rownames(cor_parasite_24h), col.names = colnames(cor_parasite_24h))
+
+write.table(cor_host_parasite_24h, paste0(repo, "res/correlation_all_parasite_positions_host_24h.csv"), quote = F, sep = ",", row.names = rownames(cor_host_parasite_24h), col.names = colnames(cor_host_parasite_24h))
+
+##38h
+write.table(cor_parasite_38h, paste0(repo, "res/correlation_all_parasite_positions_38h.csv"), quote = F, sep = ",", row.names = rownames(cor_parasite_38h), col.names = colnames(cor_parasite_38h))
+
+write.table(cor_host_parasite_38h, paste0(repo, "res/orrelation_all_parasite_positions_host_38h.csv"), quote = F, sep = ",", row.names = rownames(cor_host_parasite_38h), col.names = colnames(cor_host_parasite_38h))
+
+
+
+```
+
+```{r, export tables of gens of interest for each condition}
+ 
+write.table(rownames(cor_host_parasite_38h_neg[cor_host_parasite_38h_neg$p.adj <= 0.05,]),paste0(repo, "res/10032023_neg_cor_38_list.txt"), quote = F, row.names = F, col.names = F)
+
+write.table(rownames(cor_host_parasite_38h_pos[cor_host_parasite_38h_pos$p.adj <= 0.05,]),paste0(repo, "res/10032023_pos_cor_38_list.txt"), quote = F, row.names = F, col.names = F)
+
+write.table(rownames(cor_host_parasite_24h_neg[cor_host_parasite_24h_neg$p.adj <= 0.05,]),paste0(repo, "res/10032023_neg_cor_24_list.txt"), quote = F, row.names = F, col.names = F)
+
+write.table(rownames(cor_host_parasite_24h_pos[cor_host_parasite_24h_pos$p.adj <= 0.05,]),paste0(repo, "res/10032023_pos_cor_24_list.txt"), quote = F, row.names = F, col.names = F)
+
+write.table(rownames(cor_host_parasite_12h_neg[cor_host_parasite_12h_neg$p.adj <= 0.05,]),paste0(repo, "res/10032023_neg_cor_12_list.txt"), quote = F, row.names = F, col.names = F)
+
+write.table(rownames(cor_host_parasite_12h_pos[cor_host_parasite_12h_pos$p.adj <= 0.05,]),paste0(repo, "res/10032023_pos_cor_12_list.txt"), quote = F, row.names = F, col.names = F)
+
+```
+
+
+Load manually curated gene lists in and investigate them in detail
+
+```{r , load gene lists neg 38hpi}
+
+immune_disease <- readLines(paste0(repo, "data/gene_shortlists/38hpi/neg/immunity_disease.txt"))
+fibrosis <- readLines(paste0(repo, "data/gene_shortlists/38hpi/neg/fibrosis_nash_nafld.txt"))
+cancer <- readLines(paste0(repo, "data/gene_shortlists/38hpi/neg/cancer.txt"))
+lipid <- readLines(paste0(repo, "data/gene_shortlists/38hpi/neg/lipid_metabolism.txt")) ##Not very local effects -> leave out
+
+other <- readLines(paste0(repo, "data/gene_shortlists/38hpi/neg/other.txt"))
+
+##plot genes 
+neg_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            immune_disease[c(3,5,6, 9,10, 12,13, 16,18:20)]
+                                            ,thrs = 400, ncol = 5, nrow= 3, delta = T)
+
+neg_cor_host_parasite_38h[[2]]
+
+
+neg_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            fibrosis[c(1,2,4:6,7:9)]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+neg_cor_host_parasite_38h[[2]]
+
+
+neg_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            cancer[c(1,3,5,6)]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+neg_cor_host_parasite_38h[[2]]
+
+
+neg_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            lipid[3:7]
+                                            ,thrs = 400, ncol = 5, nrow= 1, delta = T)
+
+neg_cor_host_parasite_38h[[2]]
+
+
+
+neg_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            other[c(1,2,4)]
+                                            ,thrs = 400, ncol = 5, nrow= 1, delta = T)
+
+neg_cor_host_parasite_38h[[2]]
+
+
+
+```
+
+
+```{r, load gene lists pos 38hpi}
+
+immune_disease <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/38hpi/pos/immunity_disease.txt"))
+fibrosis <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/38hpi/pos/inflammation_fibrosis.txt"))
+cancer <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/38hpi/pos/cancer.txt"))
+glucose <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/38hpi/pos/glucose_metabolism_diabetes.txt")) 
+
+##plot genes 
+pos_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            immune_disease[c(1:3,5,7,10,13,18,19,22,23)]
+                                            ,thrs = 400, ncol = 5, nrow= 3, delta = T)
+
+pos_cor_host_parasite_38h[[2]]
+
+
+pos_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            fibrosis[c(1:8)]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+pos_cor_host_parasite_38h[[2]]
+
+
+pos_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            cancer[c(3,8,9,12)]
+                                            ,thrs = 400, ncol = 5, nrow= 3, delta = T) ## not very interesting effects 
+
+pos_cor_host_parasite_38h[[2]]
+
+
+pos_cor_host_parasite_38h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            glucose[c(1,4,6:8,10)]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+pos_cor_host_parasite_38h[[2]]
+
+
+
+
+```
+
+
+```{r , load gene lists neg 12hpi}
+
+immune_disease <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/12hpi/neg/Immune_12h_neg.txt"))
+fibrosis <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/12hpi/neg/fibrosis_12h_neg.txt"))
+cancer <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/12hpi/neg/cancer_12h_neg.txt"))
+
+
+##plot genes 
+neg_cor_host_parasite_12h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            immune_disease[c(1:3,5:7, 9:18)]
+                                            ,thrs = 400, ncol = 5, nrow= 4
+                                            ,delta = T)
+
+neg_cor_host_parasite_12h[[2]]
+
+
+neg_cor_host_parasite_12h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            fibrosis[c(1,3:4,6:8)]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+neg_cor_host_parasite_12h[[2]]
+
+
+neg_cor_host_parasite_12h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            cancer[c(1:2,4:6,8)]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+
+neg_cor_host_parasite_12h[[2]]
+
+
+```
+
+
+```{r , load gene lists pos 12hpi}
+
+immune_disease <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/12hpi/pos/Immune_12h_pos.txt"))
+fibrosis <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/12hpi/pos/fibrosis_12h_pos.txt"))
+cancer <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/12hpi/pos/cancer_12h_pos.txt"))
+glucose <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/12hpi/pos/metabolism_12h_pos.txt")) 
+
+##plot genes 
+pos_cor_host_parasite_12h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            immune_disease[c(1:2,4:12,14,16)]
+                                            ,thrs = 400, ncol = 5, nrow= 3, delta = T)
+pos_cor_host_parasite_12h[[2]]
+
+
+pos_cor_host_parasite_12h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            fibrosis[1:6]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+pos_cor_host_parasite_12h[[2]]
+
+
+pos_cor_host_parasite_12h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            cancer[c(1:3,5,6)]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T) ## not very interesting effects 
+pos_cor_host_parasite_12h[[2]]
+
+
+pos_cor_host_parasite_12h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            glucose
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+pos_cor_host_parasite_12h[[2]]
+
+
+
+
+```
+
+```{r , load gene lists neg 24hpi}
+
+immune_disease <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/24hpi/neg/immune_24h_neg.txt"))
+fibrosis <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/24hpi/neg/fibrosis_24h_neg.txt"))
+cancer <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/24hpi/neg/cancer_24h_neg.txt"))
+meta <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/24hpi/neg/metabolism_24h_neg.txt")) ##Not very local effects -> leave out
+
+##plot genes 
+neg_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            immune_disease[c(2:5,7:8,14,17,19,20)]
+                                            ,thrs = 400, ncol = 5, nrow= 2
+                                            ,delta = T)
+
+neg_cor_host_parasite_24h[[2]]
+
+
+neg_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            fibrosis
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+neg_cor_host_parasite_24h[[2]]
+
+
+neg_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            cancer[c(2:3,5,7)]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+neg_cor_host_parasite_24h[[2]]
+
+
+neg_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            meta[1:2],
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+neg_cor_host_parasite_24h[[2]]
+
+
+```
+
+```{r , load gene lists pos 24hpi}
+
+immune_disease <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/24hpi/pos/immune_24h_pos.txt"))
+fibrosis <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/24hpi/pos/fibrosis_24h_pos.txt"))
+cancer <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/24hpi/pos/cancer_24h_pos.txt"))
+glucose <- readLines(paste0(repo, "data/gene_shortlists/gene_shortlists/24hpi/pos/metabolism_24h_pos.txt"))
+
+##plot genes 
+pos_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            immune_disease[c(1,3,7:9,12,15,16)]
+                                            ,thrs = 400, ncol = 5, nrow= 4, delta = T)
+pos_cor_host_parasite_24h[[2]]
+
+
+pos_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            fibrosis[1:3]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+
+pos_cor_host_parasite_24h[[2]]
+
+
+pos_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            cancer[c(1,3)]
+                                            ,thrs = 400, ncol = 5, nrow= 1, delta = T) ## not very interesting effects 
+
+pos_cor_host_parasite_24h[[2]]
+
+
+pos_cor_host_parasite_24h <- expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            glucose[4:6]
+                                            ,thrs = 400, ncol = 5, nrow= 2, delta = T)
+
+
+pos_cor_host_parasite_24h[[2]]
+
+
+
+
+
+```
+
+
+```{r, expression by distance of DEG for infected samples}
+
+expr_by_dist(se.38h,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            unique_pb_t[[3]] ,thrs = 800, ncol = 2, nrow= 2, delta = F)[[2]]
+
+##check which genes are ahred between distance correlation and DEG:
+
+deg_cor_pos <- intersect(c(unique_pb_t[[1]],unique_pb_t[[2]],unique_pb_t[[3]]), c(rownames(cor_host_parasite_12h_pos), rownames(cor_host_parasite_24h_pos), rownames(cor_host_parasite_38h_pos)))
+
+deg_cor_neg <- intersect(c(unique_pb_t[[1]],unique_pb_t[[2]],unique_pb_t[[3]]), c(rownames(cor_host_parasite_12h_neg),rownames(cor_host_parasite_24h_neg), rownames(cor_host_parasite_38h_neg)))
+
+##show all these in expression-by-distance plot
+
+expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            deg_cor_pos,
+                                            ,thrs = 800, ncol = 2, nrow= 1, delta = F)
+
+
+expr_by_dist(se.pb,roi_dist = dist_parasite, condition = condition, center = "parasite", show.condition  = T,seed =
+                                            deg_cor_neg,
+                                            ,thrs = 800, ncol = 5, nrow= 3, delta = F)[[2]]
+
+```
+
+
+
+```{r, get terms for genes}
+
+ann_go <- read.delim(paste0(repo, "data/annotation/20230222_annotation_Symbol_GO.txt", dec = "\t"))
+ann_go_38_neg <- ann_go[ann_go$Input %in%  rownames(cor_host_parasite_38h_neg[cor_host_parasite_38h_neg$p.adj <= 0.05 ,]),]
+ann_go_38_neg$Input <- as.factor(ann_go_38_neg$Input)
+levels(ann_go_38_neg$Input)
+
+```
+
+
+To get an idea what processes the genes that correlate with the distance to the parasite might be involved in we can run a GO-term analysis 
+to widen the potential terms we can also be less stringent and include genes which are siginifantly correlated up to a p-value of 0.05 
+
+```{r, run Go-term analysis to check genes, width = 20, height = 10}
+
+##subset genes with significant correlations
+
+cor_host_parasite_12h <- cor_host_parasite_12h[cor_host_parasite_12h$p.adj < 0.05,]
+
+cor_host_parasite_24h <- cor_host_parasite_24h[cor_host_parasite_24h$p.adj < 0.05,]
+
+cor_host_parasite_38h <- cor_host_parasite_38h[cor_host_parasite_38h$p.adj < 0.05,]
+
+
+```
+
+```{r, lollipop plots of enrichment}
+
+
+res12hneg <- na.omit(gost(query = rownames(cor_host_parasite_38h[cor_host_parasite_12h$correlation_coeficent < 0,]) , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+res_neg_12p <- ggplot(res12hneg$result[res12hneg$result$source == "GO:BP",], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#F1CAC8","#F8736D"))(200)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+res_neg_12p 
+
+
+res12hpos <- na.omit(gost(query = rownames(cor_host_parasite_38h[cor_host_parasite_12h$correlation_coeficent > 0,]) , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+res_pos_12p <- ggplot(res12hpos$result[res12hpos$result$source == "GO:BP",][1:5,], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#F1CAC8","#F8736D"))(200)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+res_pos_12p 
+
+
+## 24h
+
+
+res24hneg <- na.omit(gost(query = rownames(cor_host_parasite_38h[cor_host_parasite_24h$correlation_coeficent < 0,]) , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+res_neg_24p <- ggplot(res24hneg$result[res24hneg$result$source == "GO:BP",], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#B6F3C8","#00BA38"))(200)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 24), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+res_neg_24p 
+
+
+
+res24hpos <- na.omit(gost(query = rownames(cor_host_parasite_38h[cor_host_parasite_24h$correlation_coeficent > 0,]) , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+res_pos_24p <- ggplot(res24hpos$result[res24hpos$result$source == "GO:BP",][1:5,], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#B6F3C8","#00BA38"))(200)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 24), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+res_pos_24p
+
+
+##38h
+
+res38hneg <- na.omit(gost(query = rownames(cor_host_parasite_38h[cor_host_parasite_38h$correlation_coeficent < 0,]) , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+res_neg_38p <- ggplot(res38hneg$result[res38hneg$result$source == "GO:BP",], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#C6DBFF","#629CFF"))(200)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 38), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+res_neg_38p
+
+
+
+res38hpos <- na.omit(gost(query = rownames(cor_host_parasite_38h[cor_host_parasite_38h$correlation_coeficent > 0,]) , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+res_pos_38p <- ggplot(res38hpos$result[res38hpos$result$source == "GO:BP",][1:5,], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#C6DBFF","#629CFF"))(200)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 38), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+res_pos_38p 
+
+```
+
+
+We also would like to see if there is a correlation between distance to a IHS and the distance to the parasite in the tissue 
+
+```{r, correlation between distance to a parasite and distance to IHS}
+
+dist_roi_p <- subset(dist_roi, rownames(dist_roi) %in% rownames(dist_parasite))
+dist_parasite_r <- subset(dist_parasite, rownames(dist_parasite) %in% rownames(dist_roi_p))
+combined <- data.frame(dist_roi = dist_roi_p, dist_parasite = dist_parasite_r$dist_parasite_um)
+
+combined_12h <- combined[rownames(combined) %in% rownames(se.12h[[]]),]
+combined_24h <- combined[rownames(combined) %in% rownames(se.24h[[]]),]
+combined_38h <- combined[rownames(combined) %in% rownames(se.38h[[]]),]
+
+cor_distances <- cor.test(combined_24h$dist_roi.dist_roi_um, combined_24h$dist_parasite, adjust = "bonferroni")
+
+ggscatter(combined_12h, x = "dist_parasite", y = "dist_roi.dist_roi_um", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson", color = "red2" )
+
+ggscatter(combined_24h, x = "dist_parasite", y = "dist_roi.dist_roi_um", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson", color = "green3")
+
+#slight positive correlation between distance to IHS and parasite positions indicating non-random distribution of IHS in relation to parasite positions 
+
+##Do per timepoint 
+
+```
+
+
+Now it would be interesting to see whether some positions with positive IHS and negative IF but positive RNA signal might be correlated 
+
+```{r, correlate IHS positions with positions -IF signal and +RNA signal}
+
+#subset to only have infected sections 
+se.inf <- SubsetSTData(se.pb, expression = infection == "infected")
+
+#select spots which are not annotated to be in proximity to a parasite
+se.remain <- SubsetSTData(se.inf, expression = parasite_n != "parasite")
+
+#Now select spots with nCount_pb > 1
+se.remain.p <- SubsetSTData(se.remain, expression = nCount_pb >= 1)
+##remove spots with NA values for distance to IHS
+se.remain.p <- SubsetSTData(se.remain, expression = dist_roi_um != "NA")
+
+min(se.remain.p$dist_roi_um)
+mean(se.remain.p$dist_roi_um)
+max(se.remain.p$dist_roi_um)
+
+length(which(se.remain.p$dist_roi_um < 1000))#mean(na.omit(se.remain.p$dist_roi_um)))) #how many spots are below the mean distance of positive IF localisations 
+se.remain.p[[]][which(se.remain.p$dist_roi_um <  1000 )#mean(na.omit(se.remain.p$dist_roi_um)))
+                ,] #inspect the data that follows the condition defined above
+length(which(se.remain.p$dist_roi_um <= mean(na.omit(se.remain.p$dist_roi_um))))/nrow(se.remain.p[[]])*100 # calculate the percentage of parasite transcript positive positions below mean distance to the IHSs
+
+#Now it would be interesting to see which timepoint the majority of the spots belong to or whether the distribution is equal
+
+length(which(se.remain.p[[]][which(se.remain.p$dist_roi_um < 1000 )
+                                     #mean(na.omit(se.remain.p$dist_roi_um)))
+                             ,]$timepoint == "12h"))
+length(which(se.remain.p[[]][which(se.remain.p$dist_roi_um < 1000 )
+                                     #mean(na.omit(se.remain.p$dist_roi_um)))
+                                     ,]$timepoint == "24h"))
+length(which(se.remain.p[[]][which(se.remain.p$dist_roi_um < 1000)
+                             #mean(na.omit(se.remain.p$dist_roi_um)))
+                             ,]$timepoint == "38h"))
+
+#we can run an easy barplot to visualize the data
+
+spots_per_timepoint <- data.frame(timepoint= c("12h", "24h", "38h"), 
+                                  n_spots_prox_roi = c(length(which(se.remain.p[[]][which(se.remain.p$dist_roi_um < 1000) #mean(na.omit(se.remain.p$dist_roi_um)))
+                                                                                          ,]$timepoint == "12h")),
+                                                       length(which(se.remain.p[[]][which(se.remain.p$dist_roi_um < 1000) #mean(na.omit(se.remain.p$dist_roi_um)))
+                                                                                    ,]$timepoint == "24h")),
+                                                       length(which(se.remain.p[[]][which(se.remain.p$dist_roi_um < 1000) #mean(na.omit(se.remain.p$dist_roi_um)))
+                                                                                    ,]$timepoint == "38h"))))
+
+#we want to normalize for the total number of spots in each condition to see whether this result is representative 
+
+frac_12h <- (spots_per_timepoint[spots_per_timepoint$timepoint == "12h",]$n_spots_prox_roi)/(length(which(se.remain.p$timepoint == "12h")))
+frac_24h <- (spots_per_timepoint[spots_per_timepoint$timepoint == "24h",]$n_spots_prox_roi)/(length(which(se.remain.p$timepoint == "24h")))
+frac_38h <- (spots_per_timepoint[spots_per_timepoint$timepoint == "38h",]$n_spots_prox_roi)/(length(which(se.remain.p$timepoint == "38h")))
+
+frac_12h
+frac_24h
+frac_38h
+
+## Inspect how this looks like in the parasite positive positions
+
+
+```
+
+approximately 1% of positions with a positive parasite count and negative IF signal are located in shorter distance to IHSs potentially accounting for a small number of parasites that might have been cleared (not visible in IF) to to increased inflammation in the tissue in a nearby position. However, the remaining positions share the same average distance to IFH as the remaining parasite positions, which doesn't exclude technical reasons for the discrepancies between IF signal and RNA signal. The majority of spots with a shorter distance to IFHs does coincide with early time points potentially further indicating these might be posistions of cleared parasites due to proximal inflammation/immune response.
+
+```{r, average distance of IHS to parasite}
+
+#subset data to contain only parasite spots 
+
+se.parasite <- SubsetSTData(se.pb, expression = parasite_n == "parasite")
+
+mean(na.omit(se.parasite$dist_parasite_um))
+min(na.omit(se.parasite$dist_parasite_um))
+max(na.omit(se.parasite$dist_parasite_um))
+
+min(na.omit(se.parasite$dist_roi_um))
+mean(na.omit(se.parasite$dist_roi_um))
+max(na.omit(se.parasite$dist_roi_um))
+
+```
+
+##Vein/Zonation specific analysis 
+
+First we would like to run a quick sanity check if our correlations make sense
+
+```{r,correlation analysis for distance and gene expression (veins)}
+
+row_names <- rownames(dist_vis_vein)
+dist_vis_vein <- apply(dist_vis_vein, 2, as.numeric)
+row.names(dist_vis_vein) <- row_names
+
+##central veins
+cor_central <- cor_dist(dist = dist_vis_vein[,c(1:2)], thrs = 400, object = se.pb)
+cor_central <- cor_central[cor_central$p.adj < 0.01,]
+cor_central[c(nrow(cor_central)-12):nrow(cor_central),]
+
+##portal veins
+cor_portal <- cor_dist(dist = dist_vis_vein[,c(3:4)], thrs = 400, object = se.pb)
+cor_portal <- cor_portal[cor_portal$p.adj < 0.01,]
+cor_portal[c(nrow(cor_portal)-12):nrow(cor_portal),]
+
+#look at expression by distance
+
+neg_cor_central <- expr_by_dist(se.pb,roi_dist = dist_comp_vein[,c(1:2)], condition = condition, show.condition = F, center = "central vein", seed = rownames(cor_central[c(nrow(cor_central)-12):nrow(cor_central),]),thrs = 800)
+neg_cor_central[[2]]
+
+pos_cor_central <- expr_by_dist(se.pb,roi_dist = dist_comp_vein[,c(1:2)], condition = condition, center = "central vein", ncol = 3, nrow = 3,show.condition  = F,seed = rownames(cor_central[1:8,]),thrs = 800)
+
+pos_cor_central[[2]]
+
+
+##Do the same for portal veins 
+
+
+neg_cor_portal <- expr_by_dist(se.pb,roi_dist = dist_comp_vein[,c(3:4)], condition = condition, show.condition = F, center = "portal vein", seed = rownames(cor_portal[c(nrow(cor_portal)-12):nrow(cor_portal),]),thrs = 800)
+neg_cor_portal[[2]]
+
+pos_cor_portal <- expr_by_dist(se.pb,roi_dist = dist_comp_vein[,c(3:4)], condition = condition, center = "portal vein", ncol = 3, nrow = 3,show.condition  = F,seed = rownames(cor_portal[1:8,]),thrs = 800)
+
+pos_cor_portal[[2]]
+
+
+
+
+```
+
+They do show the expected trends and because they are we can now anlyse the parasite gene expression in relation to zonation. Luckily we have the scSeq-set by Afriat et al to compare our results to in the end 
+
+First we would simply like to check if we have higher numbers of annotated parasites in central or portal areas across timepoints and if the distance of a parasite to a central or portal vein changes over infection progression. 
+
+```{r, check the distribution of parasites in central and portal areas}
+
+#extract all spots that are parasite + and either central or portal + (we can run this using the computational annotations as these have more annotated veins in them)
+
+ST.FeaturePlot(se.pb, features= "dist_parasite_um", ncol = 5)
+
+se.parasite_c_p <- SubsetSTData(se.pb, expression = parasite_n == "parasite+")
+se.parasite_c_p <- SubsetSTData(se.parasite_c_p, expression = dist_comp_ann_central_um < 400 | dist_comp_ann_portal_um < 400)
+VlnPlot(se.parasite_c_p, features = "Marco", group.by = "closest_vein", split.by = "timepoint", log = T, cols = c("darkblue", "goldenrod","darkorange"))
+#Now let's extract only timepoint and the distances to the portal or central area and the distance to the parasite
+parasite_c_p <- data.frame(timepoint = se.parasite_c_p$timepoint, dist_parasite = se.parasite_c_p$dist_parasite_um, dist_central = se.parasite_c_p$dist_comp_ann_central_um, dist_portal = se.parasite_c_p$dist_comp_ann_portal_um, row.names = rownames(se.parasite_c_p[[]]))
+
+head(parasite_c_p)
+
+#add a column annotation for each distance < 400 µm for central add central and the other way around for portal 
+
+parasite_c_p$annotation <- ifelse(parasite_c_p$dist_central < 400, paste0("central"), paste0("portal"))
+parasite_c_p$annotation
+#Now a very simple way to check if there might be a preference for the parasite might be given for a given zonation localisation we can simply see where the parasites localize across timepoints 
+
+#Make contigency - table : 
+
+df_vein_time <- data.frame(timepoint = parasite_c_p$timepoint, vein = parasite_c_p$annotation)
+
+#First let's check if we have more central or more portal annotations overall 
+table38h <- as.data.frame(t(table(parasite_c_p[parasite_c_p$timepoint == "38h",]$annotation)))
+table38h$Var1 <- paste0("38h")
+table38h <- table38h %>% #normalize by the total frequency to visualize differences more obviosuly 
+  mutate(Freq_norm = Freq / sum(Freq))
+table24h <- as.data.frame(t(table(parasite_c_p[parasite_c_p$timepoint == "24h",]$annotation)))
+table24h$Var1 <- paste0("24h")
+table24h <- table24h %>% 
+  mutate(Freq_norm = Freq / sum(Freq))
+table12h <- as.data.frame(t(table(parasite_c_p[parasite_c_p$timepoint == "12h",]$annotation)))
+table12h$Var1 <- paste0("12h")
+table12h <- table12h %>% 
+  mutate(Freq_norm = Freq / sum(Freq))
+table_new <- rbind(table12h,table24h, table38h)
+table_new
+#To run Chi-sqaure we need to spread the Var2
+data_spread <- spread(table_new[,c(1:3)], Var2, Freq)
+
+chisq.test(data_spread[1,2:3]) #12h
+chisq.test(data_spread[2,2:3]) #24h
+chisq.test(data_spread[3,2:3]) #38h
+
+
+ggplot(parasite_c_p, aes(x = timepoint, y = dist_parasite, color = annotation)) +
+         geom_boxplot()
+
+ggplot(table_new, aes(x = Var2, y = Freq_norm, color = Var2, shape = Var1)) +
+         geom_point(stat = "identity", position = "dodge", size = 10) + 
+         scale_color_manual(values = c( "portal" = "blue3", "central" = "red3")) + 
+        # scale_size_continuous(range = c(4, 12)) + 
+         theme_classic() 
+
+
+```
+
+
+We can see a slightly opposite trend where the distance to a central ven is decreasing over time while the distance to the portal vein increases in comparison. However, the differences are fairly minor, which is why we explore the differential gene expression between parasite positive positions in the central and portal vein
+
+
+
+We found genes to have different counts based on whether they have been manually annotated to be a parasite or not. After showing that these genes are only expressed in infected samples we would like to 1. show whether the overall RNA count is correlated to the distance to the average parasite and 2. show the correlation of each gene to the distance of a parasite. 
+
+```{r, correlation between distance and RNA count}
+
+library(correlation)
+library(psych)
+
+correlation(se.parasite[[c("nCount_pb", "dist_parasite_um", "parasite")]], method = "spearman")
+
+correlation(subset(se.pb[[c("nCount_pb", "dist_parasite_um", "parasite")]], se.pb[[c("nCount_pb", "dist_parasite_um", "parasite")]][,3] == "Default"), method = "spearman")
+
+correlation(subset(se.pb[[c("nCount_pb", "dist_parasite_um", "parasite")]], se.pb[[c("nCount_pb", "dist_parasite_um", "parasite")]][,3] == "parasite"), method = "spearman")
+
+
+ggplot(se.pb_alone[[c("nCount_RNA", "dist_parasite_um", "parasite")]], aes( x= nCount_RNA, y= dist_parasite_um, color = parasite)) + 
+  geom_point()+
+  geom_smooth(method=lm)
+
+ggstatsplot::ggscatterstats(data = se.parasite[[c("nCount_pb", "dist_parasite_um")]], type = "parametric", y = nCount_pb, x = dist_parasite_um, ggtheme = theme_classic())
+
+par <- subset(se.pb[[c("nCount_pb", "dist_parasite_um", "parasite")]], se.pb[[c("nCount_pb", "dist_parasite_um", "parasite")]][,3] == "parasite")
+par.1 <- par[par$nCount_pb >=1,]
+par.1 <- par.1[par.1$dist_parasite_um != "NA",]
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/correlation_distance_pb_count.pdf")
+pairs.panels(data.frame(nCount.pb = par.1$nCount_pb, distance = par.1$dist_parasite_um), method = "spearman", hist.col = 7)
+#dev.off()
+
+correlation(par.1, method = "spearman")
+
+#check correlations for all Plasmodium genes 
+
+pairs.panels(se.pb_alone[[c("dist_parasite_um", "nCount_pb")]], method = "spearman", hist.col = 7)
+
+
+```
+
+We can generally observe a negative correlation trend between the number of RNA transcripts and the distance to the parasite, validating that upon increasing distance to the parasite the number of transcript of the genes of interest generally decreases. 
+
+
+```{r, look at transcript count/ gene expression against the average distance to the parasite}
+
+#pb.s contains only count of genes of interest across spots with >= 1 count of thes genes in the data
+
+#previously we imported data on parasite distances called dist_parasite
+
+##intersect parasite distances and spots from matrix: 
+
+object <- se.pb_alone
+seed <- c(names(top.uninfected[ii.1][1:10]),names(top.infected[ii.2][1:10]))
+plotgenes <- c(1:10,12:13,15,18:20)
+
+dist_parasite_p <- expr_by_dist(object = object, seed = seed, ncol = 4, nrow = 4)
+
+dist_parasite_p$out2
+
+
+##very far from the parasite we see low expression of the genes of interest which is in accordance with the observation that expression of genes of interest (transcripts with high count) are negatively correlated with parasite gene expression, generally genes with expression in non-parasite infected regions have low expression levels (close to 0) and most of them also show higher expression in closer proximity to the parasite apart from some outliers
+
+```

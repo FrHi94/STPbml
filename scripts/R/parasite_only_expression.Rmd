@@ -1,0 +1,461 @@
+---
+title: "parasite_only"
+output: html_document
+date: '2023-01-19'
+---
+
+
+We can also investigate parasite gene exprssion and whether the data is strong enough to observe some differences in parasite gene expressin, e.g by timepoint 
+
+
+
+```{r, run some parasite analysis only}
+
+parasite_genes <- rownames(se.pb@assays$RNA@counts)[grep("-pb", rownames(se.pb@assays$RNA@counts))]
+  
+se.parasite <- SubsetSTData(se.pb, expression = parasite_n == "parasite+")
+
+se.pb_alone <- SubsetSTData(se.parasite, features = parasite_genes)
+
+se.pb_alone <- SubsetSTData(se.pb_alone, spots = names(which(colSums(se.pb_alone@assays$RNA) > 0)))
+
+
+colSums(se.pb_alone@assays$RNA)
+se.pb_alone <- SCTransform(se.pb_alone, vars.to.regress = "nCount_pb")
+se.pb_alone <- RunPCA(se.pb_alone)
+DimHeatmap(se.pb_alone, dims = 1:15)
+
+pb_alone <- FindAllMarkers(se.pb_alone, logfc.threshold = 0.001, min.pct = 0.001, only.pos = T)
+pb_alone_unique <- pb_alone[unique(pb_alone$gene),]
+
+##We do get a small number of seeningly differntially expressed genes in the different timepoints as well as the parasite clusters
+#Now we have to check them against known markers for gene expressed at different timpoints of parasite liver development 
+  
+```
+
+```{r, run heatmap to visualize the data, fig.width= 8, fig.height= 30}
+
+pb_alone_mat <- hmat_pb(t(as.matrix(se.pb_alone@assays$SCT@counts)), meta = se.pb_alone$condition)
+nrow(pb_alone_mat)
+pb_alone_mat <- na.omit(pb_alone_mat)
+nrow(pb_alone_mat)
+
+hmat <- phmat_simple(pb_alone_mat, unique(rownames(pb_alone_mat)))
+
+cluster_genes <- cutree(hmat$tree_row, k = 6)
+##Check these genes with existing data -> preprint by Shalev's group 
+#get a list of the different gene groups in the clusters from the heatmap
+pb2 <- names(cluster_genes)[cluster_genes == 1]
+pb4 <- names(cluster_genes)[cluster_genes == 2]
+pb6 <- names(cluster_genes)[cluster_genes == 3]
+pb1 <- names(cluster_genes)[cluster_genes == 4]
+pb5 <- names(cluster_genes)[cluster_genes == 5]
+pb3 <- names(cluster_genes)[cluster_genes == 6]
+```
+
+```{r, get data from Shalev paper and compare to our data}
+
+##get mean expression across pseudotime bins from mm_mota-paper (downloaded 06.04.2023)
+library(readxl)
+
+mm_pseudo <- read_excel("/home/st-analysis_home/franziska.hildebra/analysis/pseudtime_bins_p.berghei_mota.xlsx", sheet = 1, skip = 3)
+
+mm_pseudo$Gene <- gsub("_", "-",mm_pseudo$Gene)
+mm_pseudo$Gene <- paste0(mm_pseudo$Gene, "-pb")
+mm_pseudo$Symbol <- paste0(mm_pseudo$Symbol, "-pb")
+
+mm_pseudo$Symbol <- ifelse(mm_pseudo$Symbol == "NA-pb", mm_pseudo$Gene, mm_pseudo$Symbol)
+
+##subset the pseudotime data based on intersecting values
+intersect(mm_pseudo$Symbol, rownames(pb_alone_mat))
+
+mm_pseudo <- mm_pseudo[mm_pseudo$Symbol %in% intersect(mm_pseudo$Symbol, rownames(pb_alone_mat)),]
+
+
+#Now we split the data based on expression clusters in our analysis 
+##plot 1 at 24h 
+mm_pb1 <- as.data.frame(mm_pseudo[mm_pseudo$Symbol %in% pb1,]) ##24h
+mm_pb1_max <- mm_pb1[,c(2:10)]
+# apply which.max() function row-wise
+max_col_index <- apply(mm_pb1_max[, -1], 1, which.max)
+
+# extract corresponding column name using colnames() function
+max_col_name <- colnames(mm_pb1_max[, -1])[max_col_index]
+
+# add column name to original dataframe
+mm_pb1_max$Max_col_name <- max_col_name
+
+mm_pb1_new <- mm_pb1 %>%
+  gather(key = "key", value = "value", ends_with("mean"), ends_with("se")) %>%
+  separate(key, c("pseudotime", "statistic"), sep = " ") %>%
+  spread(key = "statistic", value = "value") %>%
+  mutate(pseudotime = gsub("PT-", "", pseudotime)) %>%
+  rename(mean_expression = "mean", se = "se")
+
+mm_pb2 <- as.data.frame(mm_pseudo[mm_pseudo$Symbol %in% pb2,]) ##38h
+
+mm_pb2_max <- mm_pb2[,c(2:10)]
+# apply which.max() function row-wise
+max_col_index <- apply(mm_pb2_max[, -1], 1, which.max)
+
+# extract corresponding column name using colnames() function
+max_col_name <- colnames(mm_pb2_max[, -1])[max_col_index]
+
+# add column name to original dataframe
+mm_pb2_max$Max_col_name <- max_col_name
+
+mm_pb2_new <- mm_pb2 %>%
+  gather(key = "key", value = "value", ends_with("mean"), ends_with("se")) %>%
+  separate(key, c("pseudotime", "statistic"), sep = " ") %>%
+  spread(key = "statistic", value = "value") %>%
+  mutate(pseudotime = gsub("PT-", "", pseudotime)) %>%
+  rename(mean_expression = "mean", se = "se")
+
+mm_pb3 <- as.data.frame(mm_pseudo[mm_pseudo$Symbol %in% pb3,]) ##24h +38h
+
+mm_pb3_max <- mm_pb3[,c(2:10)]
+# apply which.max() function row-wise
+max_col_index <- apply(mm_pb3_max[, -1], 1, which.max)
+
+# extract corresponding column name using colnames() function
+max_col_name <- colnames(mm_pb3_max[, -1])[max_col_index]
+
+# add column name to original dataframe
+mm_pb3_max$Max_col_name <- max_col_name
+
+mm_pb3_new <- mm_pb3 %>%
+  gather(key = "key", value = "value", ends_with("mean"), ends_with("se")) %>%
+  separate(key, c("pseudotime", "statistic"), sep = " ") %>%
+  spread(key = "statistic", value = "value") %>%
+  mutate(pseudotime = gsub("PT-", "", pseudotime)) %>%
+  rename(mean_expression = "mean", se = "se")
+
+mm_pb4 <- as.data.frame(mm_pseudo[mm_pseudo$Symbol %in% pb4,]) ##12h + 38h
+
+mm_pb4_max <- mm_pb4[,c(2:10)]
+# apply which.max() function row-wise
+max_col_index <- apply(mm_pb4_max[, -1], 1, which.max)
+
+# extract corresponding column name using colnames() function
+max_col_name <- colnames(mm_pb4_max[, -1])[max_col_index]
+
+# add column name to original dataframe
+mm_pb4_max$Max_col_name <- max_col_name
+
+
+mm_pb4_new <- mm_pb4 %>%
+  gather(key = "key", value = "value", ends_with("mean"), ends_with("se")) %>%
+  separate(key, c("pseudotime", "statistic"), sep = " ") %>%
+  spread(key = "statistic", value = "value") %>%
+  mutate(pseudotime = gsub("PT-", "", pseudotime)) %>%
+  rename(mean_expression = "mean", se = "se")
+
+mm_pb5 <- as.data.frame(mm_pseudo[mm_pseudo$Symbol %in% pb5,]) ##12h + 24h
+
+mm_pb5_max <- mm_pb5[,c(2:10)]
+# apply which.max() function row-wise
+max_col_index <- apply(mm_pb5_max[, -1], 1, which.max)
+
+# extract corresponding column name using colnames() function
+max_col_name <- colnames(mm_pb5_max[, -1])[max_col_index]
+
+# add column name to original dataframe
+mm_pb5_max$Max_col_name <- max_col_name
+
+mm_pb5_new <- mm_pb5 %>%
+  gather(key = "key", value = "value", ends_with("mean"), ends_with("se")) %>%
+  separate(key, c("pseudotime", "statistic"), sep = " ") %>%
+  spread(key = "statistic", value = "value") %>%
+  mutate(pseudotime = gsub("PT-", "", pseudotime)) %>%
+  rename(mean_expression = "mean", se = "se")
+
+mm_pb6 <- as.data.frame(mm_pseudo[mm_pseudo$Symbol %in% pb6,]) ##12h
+mm_pb6_max <- mm_pb6[,c(2:10)]
+# apply which.max() function row-wise
+max_col_index <- apply(mm_pb6_max[, -1], 1, which.max)
+
+# extract corresponding column name using colnames() function
+max_col_name <- colnames(mm_pb6_max[, -1])[max_col_index]
+
+# add column name to original dataframe
+mm_pb6_max$Max_col_name <- max_col_name
+
+
+mm_pb6_new <- mm_pb6 %>%
+  gather(key = "key", value = "value", ends_with("mean"), ends_with("se")) %>%
+  separate(key, c("pseudotime", "statistic"), sep = " ") %>%
+  spread(key = "statistic", value = "value") %>%
+  mutate(pseudotime = gsub("PT-", "", pseudotime)) %>%
+  rename(mean_expression = "mean", se = "se")
+
+#Now plot mean expression against pseudotime 
+
+ggplot(mm_pb1_new, aes(x = as.numeric(pseudotime), y = as.numeric(mean_expression), color = Symbol)) +
+  geom_point() +
+  geom_smooth(method = "auto", se = FALSE) + 
+  theme_minimal() +
+  labs(x = "Pseudotime", y = "Log10 Mean Expression") +
+  guides(color = FALSE)
+
+ggplot(mm_pb2_new, aes(x = as.numeric(pseudotime), y = as.numeric(mean_expression), color = Symbol)) +
+  geom_point() +
+  geom_smooth(method = "auto", se = FALSE) + 
+  theme_minimal() +
+  labs(x = "Pseudotime", y = "Log10 Mean Expression") +
+  guides(color = FALSE)
+
+ggplot(mm_pb3_new, aes(x = as.numeric(pseudotime), y = as.numeric(mean_expression), color = Symbol)) +
+  geom_point() +
+  geom_smooth(method = "auto", se = FALSE) + 
+  theme_minimal() +
+  labs(x = "Pseudotime", y = "Log10 Mean Expression") +
+  guides(color = FALSE)
+
+ggplot(mm_pb4_new, aes(x = as.numeric(pseudotime), y = as.numeric(mean_expression), color = Symbol)) +
+  geom_point() +
+  geom_smooth(method = "auto", se = FALSE) + 
+  theme_minimal() +
+  labs(x = "Pseudotime", y = "Log10 Mean Expression") +
+  guides(color = FALSE)
+
+ggplot(mm_pb5_new, aes(x = as.numeric(pseudotime), y = as.numeric(mean_expression), color = Symbol)) +
+  geom_point() +
+  geom_smooth(method = "auto", se = FALSE) + 
+  theme_minimal() +
+  labs(x = "Pseudotime", y = "Log10 Mean Expression") +
+  guides(color = FALSE)
+
+ggplot(mm_pb6_new, aes(x = as.numeric(pseudotime), y = as.numeric(mean_expression), color = Symbol)) +
+  geom_point() +
+  geom_smooth(method = "auto", se = FALSE) + 
+  theme_minimal() +
+  labs(x = "Pseudotime", y = "Log10 Mean Expression") +
+  guides(color = FALSE)
+
+
+```
+
+
+That is a little bit difficult to interpret, thus we now took the pseudotime bin with the maximum mean value for each gene 
+
+```{r, make piecharts with pseudotime bin percentages}
+
+# create a table of counts
+count_table <- table(mm_pb1_max[10])
+
+# calculate the proportion of each entry
+prop_table <- prop.table(count_table)
+
+# create a data frame with the entry names and percentages
+df_perc_pb1_max <- data.frame(pseudotime_bin = names(prop_table), 
+                              percentage = prop_table)
+
+# sort the data frame by percentage in descending order
+df_perc_pb1_max <- df_perc_pb1_max[order(df_perc_pb1_max$percentage.Freq, decreasing = TRUE), ]
+df_1_0 <- data.frame("pseudotime_bin" = "PT-6 mean", "percentage.Var1" = "PT-6 mean", percentage.Freq = 0) #add value with 0 %
+df_perc_pb1_max <- rbind(df_perc_pb1_max, df_1_0 )
+# create the pie chart
+
+ggplot(df_perc_pb1_max, aes(x="", y=percentage.Freq, fill=pseudotime_bin)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  theme_void() +
+  theme(legend.position="bottom") +
+  scale_fill_brewer(palette="Dark2") 
+
+
+##Do for all others 
+
+##cluster 2 
+count_table <- table(mm_pb2_max[10])
+
+# calculate the proportion of each entry
+prop_table <- prop.table(count_table)
+
+# create a data frame with the entry names and percentages
+df_perc_pb2_max <- data.frame(pseudotime_bin = names(prop_table), 
+                              percentage = prop_table)
+
+# sort the data frame by percentage in descending order
+df_perc_pb2_max <- df_perc_pb2_max[order(df_perc_pb2_max$percentage.Freq, decreasing = TRUE), ]
+
+# create the pie chart
+
+ggplot(df_perc_pb2_max, aes(x="", y=percentage.Freq, fill=pseudotime_bin)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  theme_void() +
+  theme(legend.position="bottom") +
+  scale_fill_brewer(palette="Dark2")
+
+
+##pb 3
+
+count_table <- table(mm_pb3_max[10])
+
+# calculate the proportion of each entry
+prop_table <- prop.table(count_table)
+
+# create a data frame with the entry names and percentages
+df_perc_pb3_max <- data.frame(pseudotime_bin = names(prop_table), 
+                              percentage = prop_table)
+
+# sort the data frame by percentage in descending order
+df_perc_pb3_max <- df_perc_pb3_max[order(df_perc_pb3_max$percentage.Freq, decreasing = TRUE), ]
+df_3_0 <- data.frame("pseudotime_bin" = "PT-6 mean", "percentage.Var1" = "PT-6 mean", percentage.Freq = 0) #add value with 0 %
+df_perc_pb3_max <- rbind(df_perc_pb3_max, df_3_0 )
+# create the pie chart
+
+
+ggplot(df_perc_pb3_max, aes(x="", y=percentage.Freq, fill=pseudotime_bin)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  theme_void() +
+  theme(legend.position="bottom") +
+  scale_fill_brewer(palette="Dark2")
+
+##pb 4
+count_table <- table(mm_pb4_max[10])
+
+# calculate the proportion of each entry
+prop_table <- prop.table(count_table)
+
+# create a data frame with the entry names and percentages
+df_perc_pb4_max <- data.frame(pseudotime_bin = names(prop_table), 
+                              percentage = prop_table)
+
+# sort the data frame by percentage in descending order
+df_perc_pb4_max <- df_perc_pb4_max[order(df_perc_pb4_max$percentage.Freq, decreasing = TRUE), ]
+df_4_0 <- data.frame("pseudotime_bin" = "PT-6 mean", "percentage.Var1" = "PT-6 mean", percentage.Freq = 0) #add value with 0 %
+df_perc_pb4_max <- rbind(df_perc_pb4_max, df_4_0 )
+
+# create the pie chart
+
+
+ggplot(df_perc_pb4_max, aes(x="", y=percentage.Freq, fill=pseudotime_bin)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  theme_void() +
+  theme(legend.position="bottom") +
+  scale_fill_brewer(palette="Dark2")
+
+##pb 5
+count_table <- table(mm_pb5_max[10])
+
+# calculate the proportion of each entry
+prop_table <- prop.table(count_table)
+
+# create a data frame with the entry names and percentages
+df_perc_pb5_max <- data.frame(pseudotime_bin = names(prop_table), 
+                              percentage = prop_table)
+
+# sort the data frame by percentage in descending order
+df_perc_pb5_max <- df_perc_pb5_max[order(df_perc_pb5_max$percentage.Freq, decreasing = TRUE), ]
+df_5_0 <- data.frame("pseudotime_bin" = c("PT-6 mean","PT-7 mean"), "percentage.Var1" = c("PT-6 mean", "PT-7 mean"), percentage.Freq = c(0,0)) #add value with 0 %
+df_perc_pb5_max <- rbind(df_perc_pb5_max, df_5_0 )
+
+df_perc_pb4_max <- rbind(df_perc_pb4_max, df_4_0 )
+# create the pie chart
+
+ggplot(df_perc_pb5_max, aes(x="", y=percentage.Freq, fill=pseudotime_bin)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  theme_void() +
+  theme(legend.position="bottom") +
+  scale_fill_brewer(palette="Dark2")
+
+##pb 6
+
+count_table <- table(mm_pb6_max[10])
+
+# calculate the proportion of each entry
+prop_table <- prop.table(count_table)
+
+# create a data frame with the entry names and percentages
+df_perc_pb6_max <- data.frame(pseudotime_bin = names(prop_table), 
+                              percentage = prop_table)
+
+# sort the data frame by percentage in descending order
+df_perc_pb6_max <- df_perc_pb6_max[order(df_perc_pb6_max$percentage.Freq, decreasing = TRUE), ]
+df_6_0 <- data.frame("pseudotime_bin" = "PT-6 mean", "percentage.Var1" = "PT-6 mean", percentage.Freq = 0) #add value with 0 %
+df_perc_pb6_max <- rbind(df_perc_pb6_max, df_6_0 )
+# create the pie chart
+ggplot(df_perc_pb6_max, aes(x="", y=percentage.Freq, fill=pseudotime_bin)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  theme_void() +
+  theme(legend.position="bottom") +
+  scale_fill_brewer(palette="Dark2")
+
+```
+
+
+
+```{r, check for gene expression in annotated vs. non-annotated regions, fig.width=18, fig.height=16}
+
+##subset data to only include infected samples and p.berghei counts 
+
+
+##Run PCA
+se.pb_alone <- RunPCA(se.pb_alone)
+se.pb_alone <- RunICA(se.pb_alone)
+
+DimPlot(se.pb_alone, reduction = "pca", group.by = "parasite")
+se.pb_alone <- FindNeighbors(se.pb_alone, dims = 1:25, reduction = "harmony", verbose = F)
+se.pb_alone <- FindClusters(se.pb_alone, verbose = F, resolution = 0.3)
+head(Idents(se.pb), 5)
+
+se.pb_alone <- RunUMAP(se.pb_alone, dims = 1:25, reduction = "harmony", min.dist = 0.3, spread = 0.6)
+
+DimPlot(se.pb_alone)
+
+#Run DGEA between parasite vs non-parasite annotations 
+
+se.pb_alone <- SetIdent(se.pb_alone, value = "parasite")
+
+FindAllMarkers(se.pb_alone, min.pct = 0, logfc.threshold = 0.02, only.pos = T)
+
+##Differential gene expression analysis shows only positive expression in parasite annotated genes however I am still curious which plasmodium genes show high expression in the spots which are not annotated as parasite spots and how they correlate to the distance to a parasite
+
+
+##First I look at the gene expression of Default regions in the plasmodium only data: 
+
+se.pb_alone <- SetIdent(se.pb_alone, value = "parasite")
+
+pb.mat_uninfected <- as.matrix(GetAssayData(se.pb_alone, slot = "scale.data")[, WhichCells(se.pb_alone, ident = "Default")])
+top.uninfected <- rowSums(pb.mat_uninfected)
+ii.1 <- order(top.uninfected, decreasing = T)
+top.uninfected[ii.1][1:10]
+
+##Do the same for the infected spots and compare
+
+pb.mat_infected <- as.matrix(GetAssayData(se.pb_alone, slot = "scale.data")[, WhichCells(se.pb_alone, ident = "parasite")])
+top.infected <- rowSums(pb.mat_infected)
+ii.2 <- order(top.infected, decreasing = T)
+top.infected[ii.2][1:10]
+
+
+#We find certain genes which show higher counts in spots which are not annotated as parasites - while other show higher counts in positions annotated as infected 
+
+## We can now explore whether the counts correlate to the distance to the parasite position for each spot 
+
+#First we can inspect which spots show positive counts for the genes in question and look at the corresponding distances to the parasite 
+
+#export matrix 
+
+pb.mat <- as.matrix(GetAssayData(se.pb_alone[["SCT"]], slot = "scale.data"))
+pb.mat[1:5,1:5]
+
+#get all spots with at least one count for any of the genes of interest
+pb.s <- pb.mat[c(names(top.uninfected[ii.1][1:10]),names(top.infected[ii.2][1:10])),]
+top.pb <- which(rowSums(t(pb.s)) >= 0)
+
+#Now we can look at the average distance to a parasite for each of these positions across all data 
+
+se.pb.sel <- SubsetSTData(se.pb_alone, spots = names(top.pb))
+
+se.pb.sel[[]]
+
+#This tells us that only infected samples are categorized to have positive counts for these genes - now we would like to see how the expression of each of these genes correlates to the average distance to parasite
+
+```

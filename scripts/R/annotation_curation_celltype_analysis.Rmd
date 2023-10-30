@@ -1,0 +1,910 @@
+---
+title: "March23_scmap"
+author: "Miren Urrutia Iturritza"
+date: "`r Sys.Date()`"
+output: html_document
+Description: "Manual cell type annotations/curation"
+---
+
+```{r, define your working directory (path to github repo), results='hide', message=FALSE}
+
+repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas/"
+
+```
+
+```{r, call funtions, results='hide'}
+
+source(paste0(repo,"scripts/FUNTIONS.R"))
+
+```
+
+
+```{r install packaged, include=FALSE}
+library(Seurat)
+library(multtest)
+library(metap)
+```
+
+## Load the reference data set
+```{r Load the reference dataset}
+sce_liver_stst <- readRDS(paste0(repo,"annotation/Reference_dataset_Guilliams/Mouse_SteadyState/SingleCellExperiment_liver.stst.RDS"))
+
+#Format as desired
+rowData(sce_liver_stst)$feature_symbol <- rownames(sce_liver_stst)
+colData(sce_liver_stst)$cell_type1 <-sce_liver_stst@colData$annot
+
+
+``` 
+
+## Our own data from Ghent (the data we want to annotate)
+```{r setup snRNAseq data}
+#Read our data from Ghent
+snseq_data <- readRDS( paste0(repo,"data/merged_object_annotated_500.RDS"))
+
+#Read corresponding scmap data 
+snseq_scmap <- readRDS(paste0("sce_annot_merged_NewCluster_Stst.RDS"))
+
+snseq_data$celltype_scmap <- colData(snseq_scmap)[,28]
+snseq_data[[]]
+
+``` 
+
+
+## Plot the UMAP to see which clusters we have
+```{r, clusters}
+#Visualise data
+DimPlot(snseq_data, reduction = "umap", group.by = 'seurat_clusters', label=TRUE, raster = F)
+DimPlot(snseq_data, reduction = "umap", group.by = 'celltype_scmap', label=TRUE, raster = F)
+DimPlot(snseq_data, reduction = "umap", split.by = 'orig.ident', label=TRUE, raster = F)
+#From the automated annotations we can annotate clusters 3, 6, 7, 8 and 16, 14 as well as 0,1 and 4 safely
+snseq_data$curated_celltype <- ifelse(snseq_data$seurat_clusters %in% c(7,3), "Endothelial cells", 
+                                      ifelse(snseq_data$seurat_clusters %in% c(0, 1, 15,12), "Hepatocytes", 
+                                      ifelse(snseq_data$seurat_clusters %in% c(5,10), "Fibroblasts", 
+                                      ifelse(snseq_data$seurat_clusters %in% 6, "Kupffer cells", 
+                                      ifelse(snseq_data$seurat_clusters %in% 14, "Cholangiocytes", 
+                                      "TBD")))))
+
+DimPlot(snseq_data, reduction = "umap", group.by = 'curated_celltype', label=TRUE, raster = F)
+DimPlot(snseq_data, reduction = "umap", group.by = 'seurat_clusters', label=TRUE, raster = F)
+
+#annotations to be done for: 2,5,9,10,12, 13
+#potentially subcluster cluster 5 as it is associated with more than one immune cell type 
+
+```
+
+## Now, I go cluster by cluster trying to identify which cell types cluster there
+```{r cluster 2}
+#Find conserved markers
+markers_cluster2 <-FindConservedMarkers(snseq_data, ident.1 = 2, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster2
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster2[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster2_counts <- sce_counts[rownames(markers_cluster2[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster2_counts_matrix <- as.matrix(cluster2_counts)
+cluster2_avg <- rowMeans(cluster2_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster2_avg <- cluster2_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster2 <- aggregate(sce_liver_stst@colData[, "cluster2_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster2) <- c("cell_type1", "mean_cluster2")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster2[order(-celltype_cluster2$mean_cluster2), ]
+
+#It looks like this gene is highly-representatives of Hepatocytes
+
+#rename cluster 2 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 2] <- "Hepatocytes"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+
+```
+
+```{r cluster 6}
+#Find conserved markers
+markers_cluster6 <-FindConservedMarkers(snseq_data, ident.1 = 6, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster6
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster6[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster6_counts <- sce_counts[rownames(markers_cluster6[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster6_counts_matrix <- as.matrix(cluster6_counts)
+cluster6_avg <- rowMeans(cluster6_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster6_avg <- cluster6_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster6 <- aggregate(sce_liver_stst@colData[, "cluster6_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster6) <- c("cell_type1", "mean_cluster6")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster6[order(-celltype_cluster6$mean_cluster6), ]
+
+#It looks like this gene is highly-representatives of Hepatocytes
+
+#rename cluster 6 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 6] <- "pericentral Hepatocytes"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+
+```
+
+```{r cluster 8, fig.width= 20, fig.height = 10}
+#Find conserved markers
+markers_cluster8 <-FindConservedMarkers(snseq_data, ident.1 = 8, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster8
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster8[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster8_counts <- sce_counts[rownames(markers_cluster8[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster8_counts_matrix <- as.matrix(cluster8_counts)
+cluster8_avg <- rowMeans(cluster8_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster8_avg <- cluster8_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster8 <- aggregate(sce_liver_stst@colData[, "cluster8_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster8) <- c("cell_type1", "mean_cluster8")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster8[order(-celltype_cluster8$mean_cluster8), ]
+
+#It looks like this cluster has no distinct expression for any celltype, given it is closest to hepatocytes - we will count it as such
+
+#rename cluster 8 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 8] <- "Hepatocytes"
+
+#Visualise
+DimPlot(snseq_data, split.by = "merged_type", raster = F)
+DimPlot(snseq_data, split.by = "seurat_clusters",group.by = "merged_type", raster = F)
+
+```
+
+```{r cluster 13, fig.width= 20, fig.height=20}
+#Find conserved markers
+markers_cluster13 <-FindConservedMarkers(snseq_data, ident.1 = 13, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster13
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster13[c(1:13),]), min.cutoff = 'q13', raster = F)
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster13_counts <- sce_counts[rownames(markers_cluster13[3,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster13_counts_matrix <- as.matrix(cluster13_counts)
+cluster13_avg <- rowMeans(cluster13_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster13_avg <- cluster13_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster13 <- aggregate(sce_liver_stst@colData[, "cluster13_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster13) <- c("cell_type1", "mean_cluster13")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster13[order(-celltype_cluster13$mean_cluster13), ]
+
+#It looks like this gene is highly-representatives of a bunch of different immune cells in that cluster so we might have to subcluster this one as well - potentially together with cluster5!
+
+#rename cluster 13 cells
+snseq_data$merged_type[snseq_data$seurat_clusters %in% 13] <- "T & NK cells"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+
+
+
+```
+
+
+```{r cluster 15}
+#Find conserved markers
+markers_cluster15 <-FindConservedMarkers(snseq_data, ident.1 = 15, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster15
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster15[c(1:10),]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster15_counts <- sce_counts[rownames(markers_cluster15[c(1),]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster15_counts_matrix <- as.matrix(cluster15_counts)
+cluster15_avg <- rowMeans(cluster15_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster15_avg <- cluster15_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster15 <- aggregate(sce_liver_stst@colData[, "cluster15_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster15) <- c("cell_type1", "mean_cluster15")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster15[order(-celltype_cluster15$mean_cluster15), ]
+
+#It looks like this gene is highly-representatives of a bunch of different immune cells in that cluster so we might have to subcluster this one as well - potentially together with cluster5!
+
+#rename cluster 15 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 15] <- "Y"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+
+```
+
+```{r cluster 16}
+#Find conserved markers
+markers_cluster16 <-FindConservedMarkers(snseq_data, ident.1 = 16, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster16
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster16[c(1:5),]), min.cutoff = 'q16')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster16_counts <- sce_counts[rownames(markers_cluster16[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster16_counts_matrix <- as.matrix(cluster16_counts)
+cluster16_avg <- rowMeans(cluster16_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster16_avg <- cluster16_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster16 <- aggregate(sce_liver_stst@colData[, "cluster16_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster16) <- c("cell_type1", "mean_cluster16")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster16[order(-celltype_cluster16$mean_cluster16), ]
+
+#It looks like this gene is highly-representatives of a bunch of different immune cells in that cluster so we might have to subcluster this one as well - potentially together with cluster5!
+
+#rename cluster 16 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 16] <- "X"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+
+```
+
+```{r cluster 17}
+#Find conserved markers
+markers_cluster17 <-FindConservedMarkers(snseq_data, ident.1 = 17, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster17
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster17[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster17_counts <- sce_counts[rownames(markers_cluster17[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster17_counts_matrix <- as.matrix(cluster17_counts)
+cluster17_avg <- rowMeans(cluster17_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster17_avg <- cluster17_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster17 <- aggregate(sce_liver_stst@colData[, "cluster17_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster17) <- c("cell_type1", "mean_cluster17")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster17[order(-celltype_cluster17$mean_cluster17), ]
+
+#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+#rename cluster 17 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 17] <- "Endothelial cells"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype")
+DimPlot(snseq_data, group.by =  "seurat_clusters", raster = T)
+DimPlot(snseq_data, group.by = "seurat_clusters", split.by = "curated_celltype")
+```
+
+```{r cluster 19}
+#Find conserved markers
+markers_cluster19 <-FindConservedMarkers(snseq_data, ident.1 = 19, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster19
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster19[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster19_counts <- sce_counts[rownames(markers_cluster19[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster19_counts_matrix <- as.matrix(cluster19_counts)
+cluster19_avg <- rowMeans(cluster19_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster19_avg <- cluster19_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster19 <- aggregate(sce_liver_stst@colData[, "cluster19_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster19) <- c("cell_type1", "mean_cluster19")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster19[order(-celltype_cluster19$mean_cluster19), ]
+
+#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+#rename cluster 19 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 19] <- "B cell"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype")
+DimPlot(snseq_data, group.by = "curated_celltype", split.by = "seurat_clusters")
+DimPlot(snseq_data, group.by = "seurat_clusters", split.by = "curated_celltype")
+```
+
+```{r cluster 20}
+#Find conserved markers
+markers_cluster20 <-FindConservedMarkers(snseq_data, ident.1 = 20, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster20
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster20[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster20_counts <- sce_counts[rownames(markers_cluster20[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster20_counts_matrix <- as.matrix(cluster20_counts)
+cluster20_avg <- rowMeans(cluster20_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster20_avg <- cluster20_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster20 <- aggregate(sce_liver_stst@colData[, "cluster20_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster20) <- c("cell_type1", "mean_cluster20")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster20[order(-celltype_cluster20$mean_cluster20), ]
+
+#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+#rename cluster 20 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 20] <- "Hep/HsPC"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+DimPlot(snseq_data, group.by = "curated_celltype", split.by = "seurat_clusters")
+DimPlot(snseq_data, group.by = "seurat_clusters", split.by = "curated_celltype")
+```
+
+```{r cluster 21}
+#Find conserved markers
+markers_cluster21 <-FindConservedMarkers(snseq_data, ident.1 = 21, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster21
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster21[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster21_counts <- sce_counts[rownames(markers_cluster21[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster21_counts_matrix <- as.matrix(cluster21_counts)
+cluster21_avg <- rowMeans(cluster21_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster21_avg <- cluster21_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster21 <- aggregate(sce_liver_stst@colData[, "cluster21_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster21) <- c("cell_type1", "mean_cluster21")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster21[order(-celltype_cluster21$mean_cluster21), ]
+
+#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+#rename cluster 21 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 21] <- "Fibro_2"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+DimPlot(snseq_data, group.by = "curated_celltype", split.by = "seurat_clusters")
+DimPlot(snseq_data, group.by = "seurat_clusters", split.by = "curated_celltype")
+```
+
+```{r cluster 22}
+#Find conserved markers
+markers_cluster22 <-FindConservedMarkers(snseq_data, ident.1 = 22, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster22
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster22[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster22_counts <- sce_counts[rownames(markers_cluster22[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster22_counts_matrix <- as.matrix(cluster22_counts)
+cluster22_avg <- rowMeans(cluster22_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster22_avg <- cluster22_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster22 <- aggregate(sce_liver_stst@colData[, "cluster22_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster22) <- c("cell_type1", "mean_cluster22")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster22[order(-celltype_cluster22$mean_cluster22), ]
+
+#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+#rename cluster 22 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 22] <- "Endo_sub2"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+DimPlot(snseq_data, group.by = "curated_celltype", split.by = "seurat_clusters")
+DimPlot(snseq_data, group.by = "seurat_clusters", split.by = "curated_celltype")
+```
+
+```{r cluster 23}
+#Find conserved markers
+markers_cluster23 <-FindConservedMarkers(snseq_data, ident.1 = 23, grouping.var = "orig.ident")
+
+#Check conserved markers
+markers_cluster23
+
+#Visualise the top gene
+FeaturePlot(snseq_data, features = rownames(markers_cluster23[1,]), min.cutoff = 'q10')
+
+#Identify in which cell type this gene is the most expressed:
+
+#Extract the expression values for the gene of interest 
+sce_counts <- assay(sce_liver_stst, "counts")
+cluster23_counts <- sce_counts[rownames(markers_cluster23[1,]), ]
+
+#Calculate the average expression of the gene of interest across all cells
+cluster23_counts_matrix <- as.matrix(cluster23_counts)
+cluster23_avg <- rowMeans(cluster23_counts_matrix)
+
+#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
+colData(sce_liver_stst)$cluster23_avg <- cluster23_avg
+
+#Calculate the mean expression of the gene of interest for each cell type
+celltype_cluster23 <- aggregate(sce_liver_stst@colData[, "cluster23_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
+colnames(celltype_cluster23) <- c("cell_type1", "mean_cluster23")
+
+#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
+celltype_cluster23[order(-celltype_cluster23$mean_cluster23), ]
+
+#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+#rename cluster 23 cells
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 23] <- "only InF_check"
+
+#Visualise
+DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
+DimPlot(snseq_data, group.by = "curated_celltype", split.by = "seurat_clusters")
+DimPlot(snseq_data, group.by = "seurat_clusters", split.by = "curated_celltype")
+```
+
+
+Now we would like to subcluster annotated lymphoid, myeoloid and Kupffer cells which are cluster 9, 12 and 7 respectively
+
+
+```{r, subclustering}
+
+snseq_data <- FindSubCluster(
+  snseq_data,
+  9,
+  graph.name = "RNA_snn",
+  subcluster.name = "sub.cluster.lymphoid",
+  resolution = 0.3,
+  algorithm = 1
+)
+
+DimPlot(snseq_data, group.by = "sub.cluster.lymphoid")
+
+snseq_data <- FindSubCluster(
+  snseq_data,
+  12,
+  graph.name = "RNA_snn",
+  subcluster.name = "sub.cluster.myeloid",
+  resolution = 0.3,
+  algorithm = 1
+)
+
+DimPlot(snseq_data, group.by = "sub.cluster.myeloid")
+
+snseq_data <- FindSubCluster(
+  snseq_data,
+  6,
+  graph.name = "SCT_snn",
+  subcluster.name = "sub.cluster.6",
+  resolution = 0.3,
+  algorithm = 1
+)
+
+DimPlot(snseq_data, group.by = "sub.cluster.6", label = T)
+```
+
+Sub-cluster cluster 6 as well as there seem 
+
+```{r, cluster 6}
+
+snseq_data <- SetIdent(snseq_data, value = "sub.cluster.6")
+snseq_data_6 <- subset(snseq_data, seurat_clusters %in% 6)
+
+sub_6_0 <- FindConservedMarkers(snseq_data_6, ident.1 = "6_0", grouping.var = "orig.ident")
+#sub_6_0 = Stellate cells 
+sub_6_1 <- FindConservedMarkers(snseq_data_6, ident.1 = "6_1", grouping.var = "orig.ident")
+sub_6_1 <- subset(sub_6_1, sub_6_1$sample24_avg_log2FC > 0)
+sub_6_2 <- FindConservedMarkers(snseq_data_6, ident.1 = "6_2", grouping.var = "orig.ident")
+#sub_6_2 = KCs
+sub_6_3 <- FindConservedMarkers(snseq_data_6, ident.1 = "6_3", grouping.var = "orig.ident")
+#sub_6_3 = LSECs
+sub_6_4 <- FindConservedMarkers(snseq_data_6, ident.1 = "6_4", grouping.var = "orig.ident")
+#sub_6_4 = T cells 
+sub_6_5 <- FindConservedMarkers(snseq_data_6, ident.1 = "6_5", grouping.var = "orig.ident")
+#sub_6_5 = Stellate cells
+sub_6_6 <- FindConservedMarkers(snseq_data_6, ident.1 = "6_6", grouping.var = "orig.ident")
+#sub_6_5 = Stellate cells
+
+
+DimPlot(snseq_data_6)
+
+snseq_data$merged_type[snseq_data$sub.cluster.6 %in% "6_0"] <- "Kupffer cells"
+snseq_data$merged_type[snseq_data$sub.cluster.6 %in% "6_1"] <- "Kupffer cells"
+snseq_data$merged_type[snseq_data$sub.cluster.6 %in% "6_2"] <- "Kupffer cells"
+snseq_data$merged_type[snseq_data$sub.cluster.6 %in% "6_3"] <- "Kupffer cells"
+snseq_data$merged_type[snseq_data$sub.cluster.6 %in% "6_4"] <- "Monocytes & DCs"
+snseq_data$merged_type[snseq_data$sub.cluster.6 %in% "6_5"] <- "Kupffer cells"
+snseq_data$merged_type[snseq_data$sub.cluster.6 %in% "6_6"] <- "Monocytes & DCs"
+
+```
+
+```{r, Plot the final annotations for the merged object, width = 40, height = 40}
+
+DimPlot(snseq_data, group.by = "merged_type", label = T, raster = F)
+DimPlot(snseq_data, group.by = "seurat_clusters", label = T, raster = F)
+
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(0,1,12,15)] <- "Periportal hepatocytes"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(4,16)] <- "Pericentral hepatocytes"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(11)] <- "Inflammatory hepatocytes"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(8,19)] <- "Activated periportal hepatocytes"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(3,7)] <- "Endothelial cells"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(13)] <- "Periportal endothelial cells"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(9)] <- "T & NK cells"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(5,10)] <- "Fibroblasts"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(14)] <- "Cholangiocytes"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(18)] <- "Mesothelial cells"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(17)] <- "B cells"
+snseq_data$merged_type[snseq_data$seurat_clusters %in% c(2)] <- "Midlobular hepatocytes"
+saveRDS(snseq_data,"dat/final_merged_curated_annotations_270623.RDS")
+
+DimPlot(snseq_data, group.by = "orig.ident", raster = F)
+
+DimPlot(snseq_data, group.by = "merged_type", raster = F, cols = c("#90e0ef", "#bdb2ff", "#90be6d", "#f5b700", "#ff6392", "#f72585", "#386641", "#2ec4b6", "#94d2bd", "#779be7", "#d62828", "#f3722c", "#072ac8", "#7209b7"), label = T)
+
+
+```
+
+Now we would like to look at potential differential expression programs of different cell types between control and infection conditions 
+
+```{r, differential expression infected vs. non-infected, fig.width= 10, fig.height= 10}
+
+##subset cell types of interest 
+
+#start with mesothelial cells: 
+
+#KCs
+
+sc.kc <- subset(snseq_data,  merged_type %in% "Kupffer cells")
+sc.kc <- SetIdent(sc.kc, value = "orig.ident")
+sc.kc_markers <- FindAllMarkers(sc.kc, logfc.threshold = 0.5, min.pct = 0.25, only.pos = T)
+sc.kc_markers <- subset(sc.kc_markers,sc.kc_markers$p_val_adj <= 0.05)
+#Show in a heatmap 
+
+#Mono+DCs
+
+sc.dcm <- subset(snseq_data,  merged_type %in% "Monocytes & DCs")
+sc.dcm <- SetIdent(sc.dcm, value = "orig.ident")
+sc.dcm_markers <- FindAllMarkers(sc.dcm, logfc.threshold = 0.5, min.pct = 0.25, only.pos = T)
+sc.dcm_markers <- subset(sc.dcm_markers,sc.dcm_markers$p_val_adj <= 0.05)
+#continue with lymphocytes
+
+#B cells
+sc.b <- subset(snseq_data,  merged_type %in% "B cells")
+sc.b <- SetIdent(sc.b, value = "orig.ident")
+sc.b_markers <- FindAllMarkers(sc.b, logfc.threshold = 0.5, min.pct = 0.25, only.pos = T)
+sc.b_markers <- subset(sc.b_markers,sc.b_markers$p_val_adj <= 0.05)
+#NK + T cells 
+sc.t <- subset(snseq_data,  merged_type %in% "T & NK cells")
+sc.t <- SetIdent(sc.t, value = "orig.ident")
+sc.t_markers <- FindAllMarkers(sc.t, logfc.threshold = 0.5, min.pct = 0.25, only.pos = T)
+sc.t_markers <- subset(sc.t_markers,sc.t_markers$p_val_adj <= 0.05)
+
+#KC
+kc.mat <- hmat_pb(t(sc.kc@assays$SCT@counts), meta = sc.kc$orig.ident)
+kc.mat <- na.omit(kc.mat)
+kc.mat <- kc.mat[, c("sample12", "sample24", "sample38", "sample12C", "sample24C", "sample38C")]
+phmat_simple(hmat = kc.mat, seed = unique(sc.kc_markers$gene))
+
+#DC_Monocytes
+dcm.mat <- hmat_pb(t(sc.dcm@assays$SCT@counts), meta = sc.dcm$orig.ident)
+dcm.mat <- na.omit(dcm.mat)
+dcm.mat <- dcm.mat[, c("sample12", "sample24", "sample38", "sample12C", "sample24C", "sample38C")]
+phmat_simple(hmat = dcm.mat, seed = unique(sc.dcm_markers$gene))
+
+#B cells
+b.mat <- hmat_pb(t(sc.b@assays$SCT@counts), meta = sc.b$orig.ident)
+b.mat <- na.omit(b.mat)
+b.mat <- b.mat[, c("sample12", "sample24", "sample38", "sample12C", "sample24C", "sample38C")]
+phmat_simple(hmat = b.mat, seed = unique(sc.b_markers$gene))
+
+#T cells
+t.mat <- hmat_pb(t(sc.t@assays$SCT@counts), meta = sc.t$orig.ident)
+t.mat <- na.omit(t.mat)
+t.mat <- t.mat[, c("sample12", "sample24", "sample38", "sample12C", "sample24C", "sample38C")]
+phmat_simple(hmat = t.mat, seed = unique(sc.t_markers$gene))
+
+##Now we can stratify even more by only selecting genes that are unique to each cell type 
+
+Reduce(intersect, list(unique(sc.kc_markers$gene), unique(sc.dcm_markers$gene), unique(sc.b_markers$gene),unique(sc.t_markers$gene)))
+
+unique_pb_t <- list(A = unique(sc.kc_markers$gene),B = unique(sc.dcm_markers$gene) , C = unique(sc.b_markers$gene), D= unique(sc.t_markers$gene))
+
+unique_pb_t <- lapply(1:length(unique_pb_t), function(n) setdiff(unique_pb_t[[n]], unlist(unique_pb_t[-n])))
+
+unique_pb_t
+
+##Now we only plot the cell type specific genes and plot these instead 
+
+kc.hmat <- phmat_simple(hmat = kc.mat, seed = unique_pb_t[[1]]) #KC
+dcm.hmat <- phmat_simple(hmat = dcm.mat, seed = unique_pb_t[[2]]) #DC + Mono
+bmat <- phmat_simple(hmat = b.mat, seed = unique_pb_t[[3]]) #B 
+tmat <- phmat_simple(hmat = t.mat, seed = unique_pb_t[[4]]) #T
+
+##Now I want to split the tree to only show genes that show upregulation in infected conditions
+
+dend_kc <- kc.hmat$tree_row
+# Extract the cluster assignments for each row
+clusters_dend_kc <- cutree(dend_kc, k = 2)
+clusters_dend_kc
+
+#Only plot the ones in cluster 1 (upregulated in infected conditions)
+kc.hmat <- phmat_simple(hmat = kc.mat, seed = names(clusters_dend_kc[clusters_dend_kc %in% 1]))
+
+##dcm 
+
+dend_dcm <- dcm.hmat$tree_row
+# Extract the cluster assignments for each row
+clusters_dend_dcm <- cutree(dend_dcm, k = 3)
+clusters_dend_dcm
+
+#Only plot the ones in cluster 1 (upregulated in infected conditions)
+dcm.hmat <- phmat_simple(hmat = dcm.mat, seed = names(clusters_dend_dcm[clusters_dend_dcm %in% 1]))
+
+##b
+dend_b<- bmat$tree_row
+# Extract the cluster assignments for each row
+clusters_dend_b <- cutree(dend_b, k = 3)
+clusters_dend_b
+
+#Only plot the ones in cluster 1 (upregulated in infected conditions)
+bmat <- phmat_simple(hmat = b.mat, seed = names(clusters_dend_b[clusters_dend_b %in% c(1:2)]))
+##t
+dend_t <- tmat$tree_row
+# Extract the cluster assignments for each row
+clusters_dend_t <- cutree(dend_t, k = 3)
+clusters_dend_t
+
+#Only plot the ones in cluster 1 (upregulated in infected conditions)
+tmat <- phmat_simple(hmat = t.mat, seed = names(clusters_dend_t[clusters_dend_t %in% c(1,3)]))
+```
+
+```{r, run enrichment analysis on upregulated genes of infected conditions, fig.width= 8, fig.height= 8}
+
+##kcs
+kc.enrich <- gost(query = names(clusters_dend_kc[clusters_dend_kc %in% 1]) #the genes we selected for plotting in the previous chunk 
+                  , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T)
+
+ggplot(kc.enrich$result[kc.enrich$result$term_name %in% c("positive regulation of phagocytosis", "leukocyte migration", "regulation of phagocytosis", "positive regulation of endocytosis", "positive reglation of transport"),], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#C1E6C8","#386641"))(100)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 10)) +  # Set y-axis limits to 0 and 10
+  coord_flip() +
+  xlab("GO term enrichment")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_blank(), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+enrichment_kc_candidates <- unique(unlist(strsplit(kc.enrich$result$intersection[kc.enrich$result$term_name %in% c("positive regulation of phagocytosis", "leukocyte migration", "regulation of phagocytosis", "positive regulation of endocytosis", "positive reglation of transport")], ",")))
+##now we want the genelist of the genes involved in these processes to highlight them in the heatmap 
+
+##dc and monos
+
+dcm.enrich <- gost(query = names(clusters_dend_dcm[clusters_dend_dcm %in% 1]) #the genes we selected for plotting in the previous chunk 
+                  , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T)
+
+ggplot(dcm.enrich$result[dcm.enrich$result$term_name %in% c("antigen processing and presentation of exogenous peptide antigen via MHC class II", "antigen processing and presentation of peptide antigen via MHC class II","antigen processing and presentation of peptide or polysaccharide antigen via MHC class II", "antigen processing and presentation of exogenous peptide antigen" , "antigen processing and presentation of exogenous antigen" ),], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#B2C2E4","#779be7"))(100)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 10)) +  # Set y-axis limits to 0 and 10
+  coord_flip() +
+  xlab("GO term enrichment")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_blank(), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+enrichment_dcm_candidates <- unique(unlist(strsplit(dcm.enrich$result$intersection[dcm.enrich$result$term_name %in% c("antigen processing and presentation of exogenous peptide antigen via MHC class II", "antigen processing and presentation of peptide antigen via MHC class II","antigen processing and presentation of peptide or polysaccharide antigen via MHC class II", "antigen processing and presentation of exogenous peptide antigen" , "antigen processing and presentation of exogenous antigen" )], ",")))
+
+
+
+## b cells 
+
+b.enrich <- gost(query = names(clusters_dend_b[clusters_dend_b %in% c(1:2)]) #the genes we selected for plotting in the previous chunk 
+                  , organism = "mmusculus", significant = T, sources = c("GO:BP"), evcodes = T)
+
+ggplot(b.enrich$result[b.enrich$result$term_name %in% c("leukocyte activation","immune response-regulating cell surface receptor signaling pathway","B cell activation","lymphocyte activation", "B cell receptor signaling pathway"),], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#E4DFFF","#bdb2ff"))(100)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 10)) +  # Set y-axis limits to 0 and 10
+  coord_flip() +
+  xlab("GO term enrichment")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_blank(), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+enrichment_b_candidates <- unique(unlist(strsplit(b.enrich$result$intersection[b.enrich$result$term_name %in% c("leukocyte activation","immune response-regulating cell surface receptor signaling pathway","B cell activation","lymphocyte activation", "B cell receptor signaling pathway")], ",")))
+
+## t cells 
+
+t.enrich <- gost(query = names(clusters_dend_t[clusters_dend_t %in% c(1,3)]) #the genes we selected for plotting in the previous chunk 
+                  , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T) 
+
+ggplot(t.enrich$result[t.enrich$result$term_name %in% c("leukocyte activation",  "immune response-activating cell surface receptor signaling pathway" , "alpha-beta T cell activation", "T cell differentiation","regulation of cell adhesion", "lymphocyte differentiation", "leukocyte differentiation", "antigen receptor-mediated signaling pathway", "T cell activation","gamma-delta T cell activation","lymphocyte proliferation", "Natural killer cell mediated cytotoxicity","Leukocyte transendothelial migration", "Th1 and Th2 cell differentiation"),], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black") +
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score", colors = colorRampPalette(c("#B9A5C6","#7209b7"))(100)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 10)) +  # Set y-axis limits to 0 and 10
+  coord_flip() +
+  xlab("GO term enrichment") +
+  ylab("Enrichment Score") +
+  theme(
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(size = 10),
+    panel.background = element_blank(),
+    axis.title = element_text(size = 12),
+    legend.text = element_text(size = 8),
+    legend.title = element_text(size = 10),
+    legend.position = "None"
+  )
+
+enrichment_t_candidates <- unique(unlist(strsplit(t.enrich$result$intersection[t.enrich$result$term_name %in% c("leukocyte activation",  "immune response-activating cell surface receptor signaling pathway" , "alpha-beta T cell activation", "T cell differentiation","regulation of cell adhesion", "lymphocyte differentiation", "leukocyte differentiation", "antigen receptor-mediated signaling pathway", "T cell activation","gamma-delta T cell activation","lymphocyte proliferation", "Natural killer cell mediated cytotoxicity","Leukocyte transendothelial migration", "Th1 and Th2 cell differentiation")], ",")))
+
+##Now we can select genes in the intersection of pathways of interest and highlight them in the heatmaps + show lollipop plots
+
+
+```
+
+```{r, look at the genes that are upregulated in the controls}
+
+
+##dc and monos
+dcm.enrich <- gost(query = names(clusters_dend_dcm[clusters_dend_dcm %in% 2]) #the genes we selected for plotting in the previous chunk 
+                  , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T)
+
+ggplot(dcm.enrich$result[dcm.enrich$result$source == "GO:BP",], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#B2C2E4","#779be7"))(100)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term enrichment")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+
+## b cells 
+b.enrich <- gost(query = names(clusters_dend_b[clusters_dend_b %in% c(3)]) #the genes we selected for plotting in the previous chunk 
+                  , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T)
+
+ggplot(b.enrich$result[b.enrich$result$source == "GO:BP",], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#E4DFFF","#bdb2ff"))(100)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term enrichment")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+## t cells 
+
+t.enrich <- gost(query = names(clusters_dend_t[clusters_dend_t %in% c(1,3)]) #the genes we selected for plotting in the previous chunk 
+                  , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T)
+
+ggplot(t.enrich$result[t.enrich$result$source == "GO:BP",][1:10,], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#B9A5C6","#7209b7"))(100)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("GO term enrichment")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+
+
+
+```

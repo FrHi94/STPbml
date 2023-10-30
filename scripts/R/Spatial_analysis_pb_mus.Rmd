@@ -1,0 +1,1438 @@
+---
+title: "Analysis of spatial data generated from P.berghei infected liver"
+output: html_notebook
+---
+
+
+#####Prepare analysis
+
+To begin with the analysis we first need to load packages which are needed throughout the analysis. If the packages are not installed you can install them through cran or [bioconductor](https://www.bioconductor.org/install/). The most important package we are using in this markdown is the [STUtility package](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-020-06832-3), which can be installed as described [here](https://ludvigla.github.io/STUtility_web_site/Installation.html). 
+
+
+```{r, load packages, echo=T, results='hide'}
+library(devtools)
+library(STutility)
+library(Matrix)
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(akima)
+library(imager)
+library(corrplot)
+library(harmony)
+library(tidyverse)
+library(treemapify)
+library(rrvgo)
+library(pheatmap)
+```
+
+Next we need to load all expression matrices which are in tsv format as output from the spatial transcriptomics alignment pipeline, spot coordinate files and jpg image files . Here we have a total of 38 samples for all conditions.  
+
+```{r, make infotable from scratch, echo=TRUE, results='hide'}
+
+##cnt files 
+
+samples <- c(#12h-infected
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/inf/CN29_C1_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/inf/CN29_D1_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/inf/CN57_12h_D1_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/inf/CN63_D1_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/inf/CN63_E1_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/inf/CN70_C1_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/inf/CN70_C2_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/inf/CN71_C2_stdata.tsv.gz", 
+  #12h -control
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/ctrl/CN29_C2_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/ctrl/CN29_D2_stdata.tsv.gz",
+            "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/ctrl/CN63_D2_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/ctrl/CN63_E2_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/ctrl/CN70_D2_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/cnt/ctrl/CN71_D1_stdata.tsv.gz",
+  #24h -infected
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/inf/CN31_24h_D1_stdata.tsv.gz",  
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/inf/CN31_24h_E1_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/inf/CN54_24h_C2_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/inf/CN54_24h_E1_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/inf/CN55_24h_C1_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/inf/CN55_24h_D1_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/inf/CN55_24h_E1_stdata.tsv.gz",
+  #24h -control
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/ctrl/CN31_24h_cat_C2_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/ctrl/CN31_E2_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/ctrl/CN54_24h_D2_stdata.tsv.gz",            
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/cnt/ctrl/CN55_24h_C2_stdata.tsv.gz",
+  #38h -infected
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/inf/CN50_C1_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/inf/CN50_C2_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/inf/CN50_D2_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/inf/CN51_38h_C1_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/inf/CN51_38h_D1_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/inf/CN53_38h_C1_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/inf/CN53_38h_D1_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/inf/CN53_38h_E1_stdata.tsv.gz", 
+  #38h -control
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/ctrl/CN50_E1_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/ctrl/CN50_E2_stdata.tsv.gz",
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/ctrl/CN51_38h_C2_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/ctrl/CN51_38h_D2_stdata.tsv.gz", 
+             "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/cnts/ctrl/CN53_38h_D2_stdata.tsv.gz"
+             )
+
+```
+
+```{r, spt files}
+
+##coordinate files 
+
+spotfiles <- c("/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/inf/spot_selection-CN29_C1_0.1.tsv.gz",
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/inf/spot_selection-CN29_D1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/inf/spot_selection-CN57_C1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/inf/spot_selection-CN63_D1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/inf/spot_selection-CN63_E1_0.1.tsv.gz",
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/inf/spot_selection-CN70_C1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/inf/spot_selection-CN70_C2_0.1.tsv.gz", 
+              "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/inf/spot_selection-CN71_C2_0.1.tsv.gz",
+              
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/ctrl/spot_selection-CN29_C2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/ctrl/spot_selection-CN29_D2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/ctrl/spot_selection-CN63_D2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/ctrl/spot_selection-CN63_E2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/ctrl/spot_selection-CN70_D2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_12h/PB-12h/spts/ctrl/spot_selection-CN71_D1_0.1.tsv.gz", 
+              
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/inf/spot_selected-CN31_D1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/inf/spot_selected-CN31_E1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/inf/spot_selected-CN54_C2_0.1.tsv.gz",
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/inf/spot_selected-CN54_E1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/inf/spot_selected-CN55_C1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/inf/spot_selected-CN55_D1_0.1.tsv.gz",
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/inf/spot_selected-CN55_E1_0.1.tsv.gz", 
+              
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/ctrl/spot_selected-CN31_C2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/ctrl/spot_selected-CN31_E2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/ctrl/spot_selected-CN54_D2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_24h/PB-24h/spts/ctrl/spot_selected-CN55_C2_0.1.tsv.gz", 
+              
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/inf/spots_CN50_PBL_C1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/inf/spots_CN50_PBL_C2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/inf/spots_CN50_PBL_D2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/inf/spots_CN51_PBL_C1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/inf/spots_CN51_PBL_D1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/inf/spots_CN53_PBL_C1_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/inf/spots_CN53_PBL_D1_0.1.tsv.gz",
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/inf/spots_CN53_PBL_E1_0.1.tsv.gz",
+              
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/ctrl/spots_CN50_PBL_E1_0.1.tsv.gz",
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/ctrl/spots_CN50_PBL_E2_0.1.tsv.gz",
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/ctrl/spots_CN51_PBL_C2_0.1.tsv.gz",
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/ctrl/spots_CN51_PBL_D2_0.1.tsv.gz", 
+               "/home/st-analysis_home/franziska.hildebra/BergheiLiver/PB_38h/spts/ctrl/spots_CN53_PBL_D2_0.1.tsv.gz")
+
+```
+
+for the images we upload the images for which we have performed parasite annotations by overlaying the fluorescence images and the Hematoxylin & Eosin images. They include the extenesion "annotated" in the file name. 
+
+```{r, img files}
+
+##images 
+
+imgs <- c("/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/inf/20210223_CN29_ST_12h_H_F_HE.C1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/inf/20210223_CN29_ST_12h_H_F_HE.D1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/inf/210412_CN57_PB_12h_HE_C1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/inf/210607_ST_200302_12h_CN63_HE_D1_annotated_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/inf/210607_ST_200302_12h_CN63_E1_annotated_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/inf/211010_CN70_J_RP_12h_C1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/inf/211010_CN70_12h_HE.C2_annotated_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/inf/211010-CN71-K-C_C2_annotated_0.1.jpg",
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/20210223_CN29_ST_12h_H_F_HE.C2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/20210223_CN29_ST_12h_H_F_HE.D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/210607_ST_200302_G_RP_12h_CN63_HE_D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/210607_ST_200302_G_RP_12h_CN63_HE_E2_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/211010_CN70_12h_HE.D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/211010-CN71_HE.D1_0.1.jpg", 
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/inf/20210222_CN31_ST_24h_J_F_HE_D1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/inf/20210222_CN31_ST_24h_J_F_HE_E1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/inf/CN54_24h_H.RP1_L_C2_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/inf/210327_CN54_24h_H.RP1_L_RP.2_HE.E1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/inf/210330_CN55_24h_G.RH.1_I.RH2_HE.C1_annotated_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/inf/210330_CN55_24h_G.RH.1_I.RH2_HE.D1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/inf/210330_CN55_24h_G.RH.1_I.RH2_HE.E1_annotated_0.1.jpg",
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/ctrl/20210222_CN31_ST_24h_J_F_HE_C2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/ctrl/20210222_CN31_ST_24h_J_F_HE_E2_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/ctrl/210327_CN54_24h_H.RP1_L_RP.2_HE.D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/ctrl/210330_CN55_24h_G.RH.1_I.RH2_HE.C2_0.1.jpg",
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/inf/CN50_PBL_HE_C1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/inf/CN50_PBL_HE_C2_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/inf/CN50_PBL_HE_D2_annotated_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/inf/210326_CN51_Pb_G.1_I.2_HE_C1_annotated_0.1.jpg", "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/inf/210326_CN51_Pb_G.1_I.2_HE_D1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/inf/210326_CN53_Pb_G.C.1_I.C.2_HE_C1_annotated_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/inf/210326_CN53_Pb_G.C.1_I.C.2_HE_D1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/inf/210326_CN53_Pb_G.C.1_I.C.2_HE_E1_annotated_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/ctrl/CN50_PBL_HE_E1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/ctrl/CN50_PBL_HE_E2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/ctrl/210326_CN51_Pb_G.1_I.2_HE_C2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/ctrl/210326_CN51_Pb_G.1_I.2_HE_D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/38h/ctrl/210326_CN53_Pb_G.C.1_I.C.2_HE_D2_0.1.jpg")
+```
+
+Now that all data is uploaded we create a table (dataframe) with the different datatypes as columns and the samples as rows 
+
+```{r, make table}
+
+infoTable.mus <- data.frame(samples =samples, spotfiles = spotfiles,imgs= imgs)
+
+infoTable.mus$sample_id <- paste0("sample_", 1:nrow(infoTable.mus)) 
+infoTable.mus$timepoint <- paste0(c(rep("12h",14), rep("24h",11), rep("38h",13)))
+infoTable.mus$infection <- paste0(c(rep("infected",8), rep("control", 6),rep("infected",7),rep("control",4),rep("infected",8),rep("control",5)))
+infoTable.mus$platform <- paste0("2k")
+
+```
+
+#####Object generation, quality controls and filtering 
+
+Next we need to upload a custom annotation file for our data to translate Ensembl and Plasmodium IDs to gene names. Once we imported this annotation file we can generate a Seurat object using the InputFromTable function from the STUtility package.  
+
+```{r, read data, echo=TRUE, results='hide'}
+
+mus.pb.annotation <- read.table("/home/st-analysis_home/franziska.hildebra/analysis/mus_pb_annotation_seurat.tsv", header = T, sep = "\t")
+
+se.pb <- InputFromTable(infotable = infoTable.mus, #Run in console 
+                   platform = "2k", # specify the platform
+                   minUMICountsPerGene = 10, #specify filters
+                      minGenesPerSpot = 5,
+                      minUMICountsPerSpot = 500, 
+                      annotation = mus.pb.annotation, #specify annotation 
+                      transpose = TRUE) 
+
+
+```
+
+Next we would like to run a few quality control steps to see how many mitochondrial reads we receive across spatial positions as well as how many *Plasmodium berghei* reads before normalization. 
+
+
+```{r, Quality controls, fig.height=4, fig.width=8}
+
+se.pb[["percent.mt"]] <- PercentageFeatureSet(se.pb, pattern = "mt-")
+
+ST.FeaturePlot(se.pb, features = "nFeature_RNA", ncol = 5)
+
+#calculate the percentage of P.Berghei transcripts
+se.pb[["percent.pb"]] <- PercentageFeatureSet(se.pb, pattern = "-pb")
+
+VlnPlot(se.pb, group.by = "sample_id",features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.pb"), ncol = 4)
+
+```
+
+Since we established gene count (feature count), read count, and mitochondrial as well as parasite percentages we would now like to add an extra column including the total parasite counts.
+
+```{r, determine the sum of P.berghei transcripts, fig.height=4, fig.width=4, error=FALSE, warning=FALSE, message=FALSE}
+
+
+pb.mat <- as.matrix(se.pb@assays$RNA@counts)
+pb.mat.1 <- pb.mat[grep("-pb", rownames(pb.mat)),]
+pb.sum <- as.data.frame(colSums(pb.mat.1))
+
+se.pb[["nCount_pb"]] <- pb.sum #add sum of P.berghei counts to the metadata
+
+pb.sum <- subset(pb.sum, pb.sum > 0)
+pb.sum$spot <- rownames(pb.sum)
+colnames(pb.sum) <- c("col_sum", "spot")
+hist(log10(pb.sum$col_sum))
+
+                                                
+pb.sum$spot <- factor(pb.sum$spot,                                    
+                  levels = pb.sum$spot[order(pb.sum$col_sum, decreasing = TRUE)])
+
+ggplot(pb.sum, aes(spot,log10(col_sum))) + 
+  geom_col()
+
+pb.sum$log10 <- log10(pb.sum$col_sum)
+pb.sum <- subset(pb.sum, pb.sum$log10 > 0)
+pb.sum$log2 <- log2(pb.sum$col_sum)
+
+
+```
+
+
+```{r, plot only Plasmodium count on the infected tissue}
+
+##example for 12hpi
+
+inf12h_p <- FeatureOverlay(se.pb,features = "nCount_pb",ncols = 1, sampleids = 31, pt.size = 1, pt.alpha = 0.6, sample.label = F, cols = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001), custom.theme = theme(legend.title = element_blank(), plot.title = element_blank()))
+
+#png("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/nCount_berghei_12h.png", width = 20, height = 20, res = 300, units = "cm")
+inf12h_p 
+#dev.off()
+
+##example for 24hpi
+
+inf24h_p <- FeatureOverlay(se.pb,features = "nCount_pb",ncols = 2, sampleids = infs[9:15], pt.size = 1, pt.alpha = 0.6, custom.theme = theme(legend.title = element_blank(), plot.title = element_blank()), sample.label = F )
+
+#png("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/nCount_berghei_24h.png", width = 20, height = 20, res = 300, units = "cm")
+inf24h_p 
+#dev.off()
+
+##example for 38hpi
+
+inf38h_p <- FeatureOverlay(se.pb,features = "nCount_pb",ncols = 2, sampleids = infs[16:23], pt.size = 1, pt.alpha = 0.6, custom.theme = theme(legend.title = element_blank(), plot.title = element_blank()), sample.label = F )
+
+#png("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/nCount_berghei_38h.png", width = 20, height = 20, res = 300, units = "cm")
+inf38h_p 
+#dev.off()
+
+#png("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/nCount_mosquitosaliva_pb.png", width = 40, height = 40, res = 300, units = "cm")
+FeatureOverlay(se.pb, features = "nCount_pb", ncols = 3, sampleids = sal, pt.size = 1, pt.alpha = 0.6, custom.theme = theme(legend.title = element_blank(), plot.title = element_blank()), sample.label = F)
+#dev.off()
+
+```
+
+
+Next we would like to add a few additional co-variates to the data, including the time of dissection which we would like to regress during the normalization and integration as well as the infection condition, slide numbers etc. 
+
+```{r, include timepoint and infection as a column in the metadata, echo = T, results='hide'}
+
+#Add extraction time as a covariate
+
+se.pb$dissection <- ifelse(se.pb$timepoint %in% c("24h"), paste("evening"), paste("morning"))
+
+#Add condition as covariate
+se.pb$condition <- paste0(se.pb$timepoint," ",se.pb$infection)
+
+#Add slide id as covariate 
+            ##12h
+slide_id <- c(rep("CN29",length(which(se.pb$sample_id == "sample_1"))+length(which(se.pb$sample_id == "sample_2"))),
+              rep("CN57",length(which(se.pb$sample_id == "sample_3"))), 
+              rep("CN63", length(which(se.pb$sample_id == "sample_4"))+length(which(se.pb$sample_id == "sample_5"))),
+              rep("CN70", length(which(se.pb$sample_id == "sample_6"))+length(which(se.pb$sample_id == "sample_7"))),
+              rep("CN71", length(which(se.pb$sample_id == "sample_8"))),
+              rep("CN29", length(which(se.pb$sample_id == "sample_9"))+length(which(se.pb$sample_id == "sample_10"))), 
+              rep("CN63", length(which(se.pb$sample_id == "sample_11"))+length(which(se.pb$sample_id == "sample_12"))), 
+              rep("CN70", length(which(se.pb$sample_id == "sample_13"))),
+              rep("CN71", length(which(se.pb$sample_id == "sample_14"))), 
+              ##24h
+              rep("CN31", length(which(se.pb$sample_id == "sample_15"))+length(which(se.pb$sample_id == "sample_16"))),
+              rep("CN54", length(which(se.pb$sample_id == "sample_17"))+length(which(se.pb$sample_id == "sample_18"))), 
+              rep("CN55", length(which(se.pb$sample_id == "sample_19"))+length(which(se.pb$sample_id == "sample_20"))+length(which(se.pb$sample_id == "sample_21"))),
+              rep("CN31",length(which(se.pb$sample_id == "sample_22"))+length(which(se.pb$sample_id == "sample_23"))), 
+              rep("CN54", length(which(se.pb$sample_id == "sample_24"))), 
+              rep("CN55", length(which(se.pb$sample_id == "sample_25"))),
+              ##38h
+              rep("CN50", length(which(se.pb$sample_id == "sample_26"))+length(which(se.pb$sample_id == "sample_27"))+length(which(se.pb$sample_id == "sample_28"))),
+              rep("CN51", length(which(se.pb$sample_id == "sample_29"))+length(which(se.pb$sample_id == "sample_30"))), 
+              rep("CN53", length(which(se.pb$sample_id == "sample_31"))+length(which(se.pb$sample_id == "sample_32"))+length(which(se.pb$sample_id == "sample_33"))), 
+              rep("CN50",length(which(se.pb$sample_id == "sample_34"))+length(which(se.pb$sample_id == "sample_35"))),
+              rep("CN51", length(which(se.pb$sample_id == "sample_36"))+length(which(se.pb$sample_id == "sample_37"))),
+              rep("CN53",length(which(se.pb$sample_id == "sample_38"))))
+
+slide_id <- data.frame(spt = colnames(se.pb), slide_id = slide_id)
+rownames(slide_id) <- slide_id$spt
+slide_id$spt <- NULL
+se.pb <- AddMetaData(se.pb, slide_id)
+
+#add biorep information
+biorep <- c(rep("H_12h",length(which(se.pb$sample_id == "sample_1"))+length(which(se.pb$sample_id == "sample_2"))),
+              rep("G_12h",length(which(se.pb$sample_id == "sample_3"))), 
+              rep("G_12h", length(which(se.pb$sample_id == "sample_4"))+length(which(se.pb$sample_id == "sample_5"))),
+              rep("J_12h", length(which(se.pb$sample_id == "sample_6"))+length(which(se.pb$sample_id == "sample_7"))),
+              rep("K_12h", length(which(se.pb$sample_id == "sample_8"))),
+              rep("I_12h", length(which(se.pb$sample_id == "sample_9"))+length(which(se.pb$sample_id == "sample_10"))), 
+              rep("L_12h", length(which(se.pb$sample_id == "sample_11"))+length(which(se.pb$sample_id == "sample_12"))), 
+              rep("C_12h", length(which(se.pb$sample_id == "sample_13"))),
+              rep("L_12h", length(which(se.pb$sample_id == "sample_14"))), 
+              rep("J_24h", length(which(se.pb$sample_id == "sample_15"))+length(which(se.pb$sample_id == "sample_16"))),
+              rep("H_24h", length(which(se.pb$sample_id == "sample_17"))+length(which(se.pb$sample_id == "sample_18"))), 
+              rep("G_24h", length(which(se.pb$sample_id == "sample_19"))+length(which(se.pb$sample_id == "sample_20"))+length(which(se.pb$sample_id == "sample_21"))),
+              rep("F_24h",length(which(se.pb$sample_id == "sample_22"))+length(which(se.pb$sample_id == "sample_23"))), 
+              rep("L_24h", length(which(se.pb$sample_id == "sample_24"))), 
+              rep("I_24h", length(which(se.pb$sample_id == "sample_25"))),
+              rep("H_12h", length(which(se.pb$sample_id == "sample_26"))+length(which(se.pb$sample_id == "sample_27"))+length(which(se.pb$sample_id == "sample_28"))),
+              rep("G_12h", length(which(se.pb$sample_id == "sample_29"))+length(which(se.pb$sample_id == "sample_30"))), 
+              rep("G_12h", length(which(se.pb$sample_id == "sample_31"))+length(which(se.pb$sample_id == "sample_32"))+length(which(se.pb$sample_id == "sample_33"))), 
+              rep("F_12h",length(which(se.pb$sample_id == "sample_34"))+length(which(se.pb$sample_id == "sample_35"))),
+              rep("I_12h", length(which(se.pb$sample_id == "sample_36"))+length(which(se.pb$sample_id == "sample_37"))),
+              rep("I_12h",length(which(se.pb$sample_id == "sample_38"))))
+se.pb$biorep  <- biorep
+
+```
+
+Now that we have added all of this information, we would like to filter mitochondrial, mup and pseudo- as well as some ln-RNAS by selecting only protein-coding genes. 
+
+```{r, filter genes, echo = T, results='hide'}
+
+se.pb <- se.pb[-grep(pattern = c("mt-"), x = rownames(se.pb)), ]
+se.pb <- se.pb[-grep(pattern = c("Gm"), x = rownames(se.pb)), ]
+se.pb <- se.pb[-grep(pattern = c("Lars2"), x = rownames(se.pb)), ]
+se.pb <- se.pb[-grep(pattern = c("Mup"), x = rownames(se.pb)), ]
+#se.pb <- se.pb[-(which(rownames(se.pb)%in% osc.genes.pb)),] #remove genes with string circadian oscillation
+#keep all mouse protein coding genes and the plasmodium genes in the data 
+protein_coding <- subset(mus.pb.annotation, gene_biotype == "protein_coding" | species == "p.berghei")$gene_name
+protein_coding_match <- intersect(rownames(se.pb), protein_coding)
+# Keep protein coding genes
+se.pb <- se.pb[which(rownames(se.pb) %in% protein_coding_match), ]
+
+
+```
+
+Now we can run the general QCs again, without mitochondrial genes as they should be removed now. However since we included the timepoint and infection condition we can group the data by these conditions
+
+```{r, show general stats, fig.width= 4, fig.height= 4}
+
+
+#set identity to timepoint 
+
+se.pb <- SetIdent(se.pb, value = "timepoint")
+
+head(se.pb@meta.data, 5)
+
+VlnPlot(se.pb,features = c("nFeature_RNA", "nCount_RNA","nCount_pb", "percent.pb"), ncol = 2, group.by = "sample_id")
+#dev.off()
+VlnPlot(se.pb,features = c("nCount_pb", "percent.pb"),split.by = "infection", ncol = 2)
+
+VlnPlot(se.pb, features = c("nFeature_RNA", "nCount_RNA"),split.by = "infection", ncol = 2)
+
+#VlnPlot(se.pb, features = c("nFeature_SCT", "nCount_SCT"), ncol = 2)
+```
+
+
+
+Now we would like to important tables of distances we generated using annotation masks for the parasite using the hepaquery package as previosuly described [here](https://www.nature.com/articles/s41467-021-27354-w). Detailed instructions on how to install and implement the functions of this package can be found [here](https://github.com/almaan/ST-mLiver).
+
+```{r, add distances parasite, echo=T, results='hide'}
+
+dist_parasite <- read.table("/home/st-analysis_home/franziska.hildebra/analysis/distances/distances_per_spot_parasite.tsv")
+
+# add metdata to the dataframe 
+
+se.pb <- AddMetaData(se.pb, dist_parasite)
+
+se.pb$dist_parasite_px <- as.numeric(se.pb$dist_parasite_px)
+se.pb$dist_parasite_um <- as.numeric(se.pb$dist_parasite_um)
+
+
+#Only include infected sections 
+
+se.pb <- SetIdent(se.pb, value = "seurat_clusters")
+
+
+```
+
+```{r, add ROI distances,echo=TRUE, results='hide'}
+# add metdata to the dataframe 
+dist_roi <- read.table( "/home/st-analysis_home/franziska.hildebra/analysis/distances/distances_per_spot_ROI.tsv")
+se.pb <- AddMetaData(se.pb, dist_roi)
+
+se.pb$dist_roi_px <- as.numeric(se.pb$dist_roi_px)
+se.pb$dist_roi_um <- as.numeric(se.pb$dist_roi_um)
+
+```
+
+```{r, add vein distances (visual), }
+dist_vis_vein <- read.table( "/home/st-analysis_home/franziska.hildebra/analysis/distances/distances_per_spot_veins.tsv")
+
+# add metdata to the dataframe 
+
+se.pb <- AddMetaData(se.pb, dist_vis_vein)
+
+se.pb$dist_central_px <- as.numeric(se.pb$dist_central_px)
+se.pb$dist_portal_px <- as.numeric(se.pb$dist_portal_px)
+se.pb$dist_central_um <- as.numeric(se.pb$dist_central_um)
+se.pb$dist_portal_um<- as.numeric(se.pb$dist_portal_um)
+
+```
+
+
+```{r, add computational annotations, echo=TRUE, results='hide'}
+
+dist_comp_vein <- read.table("/home/st-analysis_home/franziska.hildebra/analysis/distances/distances_per_spot_comp_veins.tsv")
+# add metdata to the dataframe 
+
+se.pb <- AddMetaData(se.pb, dist_comp_vein)
+
+se.pb$dist_comp_ann_central_px <- as.numeric(se.pb$dist_comp_ann_central_px)
+se.pb$dist_comp_ann_portal_px <- as.numeric(se.pb$dist_comp_ann_portal_px)
+se.pb$dist_comp_ann_central_um <- as.numeric(se.pb$dist_comp_ann_central_um)
+se.pb$dist_comp_ann_portal_um <- as.numeric(se.pb$dist_comp_ann_portal_um)
+
+```
+
+Next we can add an additional column to the metadata that includes the parasite/IHS positions based on the IFA annotations, resulting in a binary code for parasite/IHS presence
+
+```{r, annotate parasite positions based on distance to IF parasite annotation, echo=TRUE, results='hide'}
+
+pos.par <- ifelse(se.pb$dist_parasite_um < 200, paste("parasite+"), paste("parasite-"))
+parasite_n <- data.frame(parasite_n = pos.par, spot = names(pos.par))
+parasite_n$spot <- NULL
+se.pb$parasite_n <- parasite_n # store in new variable
+
+## Do the same for IHSs 
+
+pos.IHS <- ifelse(se.pb$dist_roi_um <= 150, paste("IHS+"),paste("IHS-") )
+IHS_n <- data.frame(IHS_n = pos.IHS, spot = names(pos.IHS))
+IHS_n$spot <- NULL
+se.pb <- AddMetaData(se.pb, IHS_n) # store in new variable
+
+```
+
+We can also compare the *Plasmodium berghei* transcript count across conditions 
+
+```{r, compare P.Berghei Count between conditions, warning=FALSE}
+
+df <- data.frame(condition = se.pb$condition, P.Berghei = se.pb$nCount_pb, Total = se.pb$nCount_RNA, timepoint = se.pb$timepoint)
+count.box <- ggplot(df, aes(x= condition, y = log10(P.Berghei))) + 
+  geom_boxplot() + 
+  ylab("log10 of UMI Count") + 
+  geom_hline(yintercept = 1, color = "forestgreen") +
+  theme_minimal()
+  
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/supplementary/nCount_PB_condition.pdf")
+count.box
+#dev.off()
+```
+
+Now we want to normalize the data, regressing out effects which were introduced by the different dissection 
+
+```{r, normalize the data and run prinicipal component analysis, message=FALSE, warning=FALSE, fig.width= 4, fig.height=4}
+
+se.pb <- SCTransform(se.pb, 
+                     vars.to.regress = c("dissection")
+                     )
+se.pb <- RunPCA(se.pb)
+se.pb <- RunHarmony(se.pb, group.by.vars = c("sample_id", "dissection", "biorep"), assay.use = "SCT")
+#since the regression of the samples and dissection time as well as birep was not sufficient we runa an additional integration tool to account for these fators 
+
+#show data in pca space
+DimPlot(se.pb, group.by = "dissection", reduction = "pca")
+DimPlot(se.pb, group.by = "sample_id", reduction = "pca")
+DimPlot(se.pb, group.by = "timepoint", reduction = "pca")
+DimPlot(se.pb, group.by = "biorep", reduction = "pca")
+
+#show data in harmony (integrated) space
+DimPlot(se.pb, group.by = "infection", reduction = "harmony")
+DimPlot(se.pb, group.by = "sample_id", reduction = "harmony")
+DimPlot(se.pb, group.by = "timepoint", reduction = "harmony")
+DimPlot(se.pb, group.by = "timepoint", reduction = "harmony")
+DimPlot(se.pb, group.by = "biorep", reduction = "harmony")
+DimPlot(se.pb, group.by = "dissection", reduction = "harmony")
+
+
+```
+
+After the first linear dimensionality reduction and integration using harmony we continue to perform non-linear dimensionality reduction using UMAP and find Neighbors and cluster for graph-based embedding and visualization of the resulting low dimensional data. 
+
+```{r, run umap, fig.height=12, fig.width=10}
+
+clust.cols <- c("#1111cc", "#B23AEE","#fcca46", "#ae2012", "#A2CD5A", "#005f73", "#ee6123", "#62b6cb", "#ff0054", "#E9967A", "#76EEC6", "#00EE76") #define colors for the cluster assignments
+ElbowPlot(se.pb, reduction = "harmony")
+
+se.pb <- FindNeighbors(se.pb, dims = 1:20, reduction = "harmony", verbose = F) #Find neighbors based on integrated dimensions
+se.pb <- FindClusters(se.pb, verbose = F, resolution = 0.37) #Find number of clusters that fit biological observations by setting the resolution accordingly
+head(Idents(se.pb), 5) #show how many clusters were identified
+
+se.pb <- RunUMAP(se.pb, dims = 1:20, reduction = "harmony", min.dist = 0.3, spread = 0.6) #perform non-liner dimensionality reduction
+
+##Show various conditions in the dimensionality reduction 
+DimPlot(se.pb, reduction = "umap", group.by = "timepoint")
+DimPlot(se.pb, reduction = "umap", group.by = "infection")
+
+pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig1/UMAP_ST_together.pdf", width = 15, height = 15)
+DimPlot(se.pb, reduction = "umap",
+        cols = clust.cols, 
+        group.by = "seurat_clusters", #split.by = "condition",
+         pt.size = 3) + 
+  theme(axis.ticks = element_blank(), axis.text = element_blank(), axis.title = element_blank()) #you can set the them-axis individually as you wish so this argement is optional
+dev.off()
+
+##We can also visualize the clusters across the tissue sections 
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/cluster_tissue.pdf", width = 28, height = 56)
+ST.FeaturePlot(se.pb, features = "seurat_clusters", ncol = 4,
+                cols = clust.cols,
+                pt.size = 3)
+#dev.off()
+
+```
+Now we can continue to explore which genes are differentially expressed between the different clusters and filter the results based on logFC and signficance (p < 0.05). As we want to determine marker genes for each cluster we are only selecting genes which show upregulation in the respective clusters. This can easily be changed in case the clusters would require additional stratification. 
+
+```{r, find DEG between clusters,  echo=TRUE, results='hide', message=FALSE}
+
+se.pb <- SetIdent(se.pb, value = "seurat_clusters")
+#pb.markers <- FindMarkers(se.pb, ident.1 = 10, logfc.threshold = 0.25)
+#pb.markers <- subset(pb.markers, pb.markers$p_val_adj < 0.05)
+deg <- FindAllMarkers(se.pb, logfc.threshold = 0.25, only.pos = T)
+deg <- subset(deg, deg$p_val_adj < 0.05)
+
+##Get a dataframe for each individual cluster
+deg0 <- subset(deg, deg$cluster == 0)
+deg1 <- subset(deg, deg$cluster == 1)
+deg2 <- subset(deg, deg$cluster == 2)
+deg3 <- subset(deg, deg$cluster == 3)
+deg4 <- subset(deg, deg$cluster == 4)
+deg5 <- subset(deg, deg$cluster == 5)
+deg6 <- subset(deg, deg$cluster == 6)
+deg7 <- subset(deg, deg$cluster == 7)
+deg8 <- subset(deg, deg$cluster == 8)
+deg9 <- subset(deg, deg$cluster == 9)
+deg10 <- subset(deg, deg$cluster == 10)
+deg11 <- subset(deg, deg$cluster == 11)
+
+#write.table(deg, "/home/st-analysis_home/franziska.hildebra/analysis/res/tables_supplementary_data/deg_clusters.csv", quote = F,sep = ",", row.names = F, col.names = colnames(deg))
+
+```
+
+Now we can have a look at the DEGs in a heatmap to look at the distributions across spots and get a visual estimation on how many spots belong to each cluster. 
+
+```{r, heatmap to get an impression of genes, fig.width = 20, fig.height = 10}
+
+se.pb <- SetIdent(se.pb, value = "seurat_clusters")
+#top 20 genes
+top20de <- deg %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC) #get top 20 marker genes for each cluster
+#top 10 genes
+top10de <- deg %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC) #get top 10 marker genes for each cluster
+#top 5 genes
+top5de <- deg %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) #get top 5 marker genes for each cluster
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/Heatmap_DGEA.pdf", width = 30, height = 15)
+DoHeatmap(se.pb, features = top5de$gene, size = 4, angle = 45, group.colors = clust.cols)
+#dev.off()
+```
+After looking at each spot individually it is slightly more informative to visualize the gene expression patterns for a "pseudo bulk" averaged across all the spots which belong to individual clusters. This will also be available as a function later on. 
+
+```{r, heatmap of averaged gene expression, fig.width = 10, fig.height = 10}
+
+gene_data <- data.frame(t(se.pb@assays$SCT@counts) , cluster = se.pb$seurat_clusters,check.names = F)  
+  average_data <- aggregate(.~cluster, gene_data, mean)
+  cluster_name <- average_data[,1]
+  average_data <- apply(average_data[,2:ncol(average_data)],2,as.numeric)
+  rownames(average_data) <- cluster_name #you can also give your data individual cluster names 
+  average_data <- t(average_data)
+  phmat1 <- t(scale(t(average_data)))
+  
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig1/Heatmap_average_DGEA_top5_seurat_clusters.pdf", width = 60, height = 40)  
+pheatmap(phmat1[unique(top5de$gene),], 
+         fontsize_row = 8, 
+         fontsize_col = 35, 
+         cellwidth = 40,
+         cellheight =  10,
+         cluster_rows = F,
+         clustering_distance_rows = "correlation",
+         #breaks = seq(-max(abs(phmat1)), max(abs(phmat1)), length.out = 1000), 
+           color = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001),
+           angle_col = "45", cluster_cols = F)
+#dev.off()
+
+```
+
+
+
+```{r, change image path if necessary}
+#set path to images
+
+imgs <- c("/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/20210223_CN29_ST_12h_H_F_HE.C1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/20210223_CN29_ST_12h_H_F_HE.D1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/210412_CN57_PB_12h_G-C_HE_C1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/210607_ST_200302_G_RP_12h_CN63_HE_D1_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/210607_ST_200302_G_RP_12h_CN63_HE_E1_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/211010_CN70_12h_HE.C1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/211010_CN70_12h_HE.C2_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/211010-CN71_HE.C2_0.1.jpg",
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/20210223_CN29_ST_12h_H_F_HE.C2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/20210223_CN29_ST_12h_H_F_HE.D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/210607_ST_200302_G_RP_12h_CN63_HE_D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/210607_ST_200302_G_RP_12h_CN63_HE_E2_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/211010_CN70_12h_HE.D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/211010-CN71_HE.D1_0.1.jpg", 
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/20210222_CN31_ST_24h_J_F_HE_C1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/20210222_CN31_ST_24h_J_F_HE_E1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/210327_CN54_24h_H.RP1_L_RP.2_HE.C2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/210327_CN54_24h_H.RP1_L_RP.2_HE.E1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/210330_CN55_24h_G.RH.1_I.RH2_HE.C1_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/210330_CN55_24h_G.RH.1_I.RH2_HE.D1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/210330_CN55_24h_G.RH.1_I.RH2_HE.E1_0.1.jpg",
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/ctrl/20210222_CN31_ST_24h_J_F_HE_C2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/ctrl/20210222_CN31_ST_24h_J_F_HE_E2_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/ctrl/210327_CN54_24h_H.RP1_L_RP.2_HE.D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/24h/ctrl/210330_CN55_24h_G.RH.1_I.RH2_HE.C2_0.1.jpg",
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/CN50_PBL_HE_C1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/CN50_PBL_HE_C2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/CN50_PBL_HE_D1_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/210326_CN51_Pb_G.1_I.2_HE_C1_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/210326_CN51_Pb_G.1_I.2_HE_D1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/210326_CN53_Pb_G.C.1_I.C.2_HE_C1_0.1.jpg",
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/210326_CN53_Pb_G.C.1_I.C.2_HE_D1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/210326_CN53_Pb_G.C.1_I.C.2_HE_E1_0.1.jpg", 
+          
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/CN50_PBL_HE_E1_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/CN50_PBL_HE_E2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/210326_CN51_Pb_G.1_I.2_HE_C2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/210326_CN51_Pb_G.1_I.2_HE_D2_0.1.jpg", 
+          "/home/st-analysis_home/franziska.hildebra/analysis/HE/12h/ctrl/210326_CN53_Pb_G.C.1_I.C.2_HE_D2_0.1.jpg")
+
+se.pb@tools$Staffli@imgs <- imgs
+
+```
+
+
+```{r, Add ModuleScore for Plasmodium expression}
+
+pbgenes <- list(rownames(pb_alone_mat)) # get parasite gene list from parasite only expression markdown
+#Add Module score for parasite expression program
+se.pb <- AddModuleScore(
+  object = se.pb,
+  features = pbgenes,
+  ctrl = 100,
+  name = 'Pb_Features'
+)
+
+ST.FeaturePlot(se.pb, "Pb_Features1", ncol = 8, palette = "plasma", indices = 31)
+
+pbgenes_sub <- list(rownames(cor_parasite[cor_host_parasite$correlation_coeficent < 0,])[70:73]) # get parasite gene list from parasite only expression markdown
+#Add Module score for parasite expression program
+se.pb <- AddModuleScore(
+  object = se.pb,
+  features = pbgenes_sub,
+  ctrl = 100,
+  name = 'Pb_Features_sub'
+)
+
+##Export images of ModuleScores on tissue
+pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig2/P.Berghei_features_12h.pdf")
+FeatureOverlay(se.pb, "Pb_Features_sub1", ncol = 1, palette = "viridis", sampleids = 2, pt.alpha = 0.6, pt.size = 3)
+dev.off()
+
+pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig2/P.Berghei_features_24h.pdf")
+FeatureOverlay(se.pb, "Pb_Features_sub1", ncol = 1, palette = "viridis", sampleids = 20, pt.alpha = 0.6, pt.size = 3)
+dev.off()
+
+pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig2/P.Berghei_features_12h.pdf")
+FeatureOverlay(se.pb, "Pb_Features_sub1", ncol = 1, palette = "viridis", sampleids = 30, pt.alpha = 0.6, pt.size = 3)
+dev.off()
+
+```
+
+
+##Semi-supervised analysis
+
+
+```{r, differential gene expression between infection timepoints}
+##Don't run
+se.pb <- SetIdent(se.pb, value = "condition")
+
+deg12h <- FindMarkers(se.pb, ident.1 = "12h infected", ident.2 = c("24h infected", "12h infected", "12h control","24h control", "12h control"), logfc.threshold = 0.5, only.pos = T)
+
+deg24h <- FindMarkers(se.pb, ident.1 = "24h infected", ident.2 = c("12h infected","12h infected", "12h control","24h control", "12h control"), logfc.threshold = 0.5, only.pos = T) #the majority of these genes are different because they are regulated by the circadian rythm which is why we dom't want to consider this kind of analysis but only look at differences between 24h infection vs controls
+
+deg12h <- FindMarkers(se.pb, ident.1 = "12h infected", ident.2 = c("24h infected", "12h infected", "12h control","24h control", "12h control"), logfc.threshold = 0.5, only.pos = T)
+
+```
+
+
+```{r, differential gene expression between infection}
+
+se.pb <- SetIdent(se.pb, value = "condition")
+
+deg12h_inf <- FindMarkers(se.pb, ident.1 = "12h infected", ident.2 = "12h control", only.pos = T, logfc.threshold = 0.5)
+deg12h_inf <- subset(deg12h_inf, deg12h_inf$p_val_adj < 0.01)
+
+deg24h_inf <- FindMarkers(se.pb, ident.1 = "24h infected", ident.2 =  "24h control", only.pos = T, logfc.threshold = 0.5)
+deg24h_inf <- subset(deg24h_inf, deg24h_inf$p_val_adj < 0.01)
+
+
+deg12h_inf <- FindMarkers(se.pb, ident.1 = "12h infected", ident.2 =  "12h control", only.pos = T,logfc.threshold = 0.5)
+deg12h_inf <- subset(deg12h_inf, deg12h_inf$p_val_adj < 0.01)
+
+se.pb <- SetIdent(se.pb, value = "seurat_clusters")
+
+```
+
+
+
+```{r, parasite count around central and portal veins}
+
+se.parasite <- SubsetSTData(se.pb, expression = parasite_n == "parasite+")
+
+#add annotation columns to data: 
+
+se.parasite$closest_vein <- ifelse(se.parasite$dist_central_um < 500, paste0("central"), ifelse(se.parasite$dist_portal_um < 500, paste0("portal"), paste0("Intermediate")))
+se.parasite$closest_comp_vein <- ifelse(se.parasite$dist_comp_ann_central_um < 500, paste0("central"), ifelse(se.parasite$dist_comp_ann_portal_um< 500, paste0("portal"), paste0("intermediate")))
+
+se.veins <- SubsetSTData(se.parasite, expression = closest_comp_vein %in% c("central", "portal", "intermediate"))
+
+se.veins <- SetIdent(se.veins, value = "closest_vein")
+markers.zonation <- FindMarkers(se.veins, ident.1 = "central", ident.2 = "portal")
+markers.zonation <- subset(markers.zonation, markers.zonation$p_val_adj < 0.05)
+markers.zonation
+#We could now also check differential gene expression in central and portal regions without parasites present - for this we add the central + portal annotation to the whole dataset and run differential gene expression for a selection of central and portal areas 
+
+#We can have a look at the number of parasites with central or portal annotation
+
+VlnPlot(se.veins, features = "Pb_Features1", split.by = "closest_vein", group.by = "timepoint", log = F) #Try with DEGs from parasite expression matrix -> does not make a difference
+VlnPlot(se.veins, features = "nCount_pb", split.by = "closest_comp_vein", group.by = "timepoint", log = T)
+se.veins$pb_fraction <- ((se.veins$nCount_pb)/(se.veins$nCount_SCT))
+pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/supplementary/RNA_count_zones.pdf", height = 5, width = 8)
+VlnPlot(se.veins, features = "pb_fraction",split.by = "closest_comp_vein", group.by = "timepoint", log = F, cols = c("red4", "green4", "blue4"))
+dev.off()
+#We can then look at parasite gene expression in central, portal and portal areas alone --> make raincloud plot
+
+```
+
+```{r,check out the frequency of parasite annotated spots in space in relationship to veins}
+
+df.veins <- data.frame(vein_proximity = se.veins$closest_comp_vein, timepoint = se.veins$timepoint)
+df_veins_freq <- table(df.veins$vein_proximity, df.veins$timepoint)
+
+df_veins <- df.veins
+
+df_veins_freq <- as.data.frame(table(df_veins$vein_proximity, df_veins$timepoint))
+colnames(df_veins_freq) <- c("vein_proximity", "timepoint", "frequency")
+df_veins_freq_long <- tidyr::gather(df_veins_freq, key = "variable", value = "frequency", -vein_proximity, -timepoint)
+
+##pairwise chi-square
+
+# create a vector to store the test results
+df_veins$vein_proximity <- as.factor(df_veins$vein_proximity)
+df_veins$timepoint <- as.factor(df_veins$timepoint)
+test_results <- vector("list", length = nlevels(df_veins$vein_proximity) * nlevels(df_veins$timepoint))
+
+# loop over all vein_proximity and timepoint combinations and perform the chi-square test
+counter <- 1
+for (v in levels(df_veins$vein_proximity)) {
+  for (t in levels(df_veins$timepoint)) {
+    contingency_table <- table(df_veins$vein_proximity == v, df_veins$timepoint == t)
+    chi_sq_test <- chisq.test(contingency_table)
+    pairwise_test <- pairwise.prop.test(contingency_table)
+    test_results[[counter]] <- list(vein_proximity = v, timepoint = t, chi_sq_test = chi_sq_test, pairwise_test = pairwise_test)
+    counter <- counter + 1
+  }
+}
+
+# view the test results
+test_results
+
+# Create empty data frame with correct dimensions
+p_values <- data.frame(
+  vein_proximity = levels(df_veins$vein_proximity),
+  `12h` = numeric(length(levels(df_veins$vein_proximity))),
+  `24h` = numeric(length(levels(df_veins$vein_proximity))),
+  `38h` = numeric(length(levels(df_veins$vein_proximity)))
+)
+
+# Fill in p-values for each combination of vein proximity and timepoint
+for (i in seq_along(test_results)) {
+  v <- test_results[[i]]$vein_proximity
+  t <- test_results[[i]]$timepoint
+  p_value <- test_results[[i]]$pairwise_test$p.value
+  p_values[p_values$vein_proximity == v, as.character(t)] <- p_value
+}
+
+# Rename columns for clarity
+colnames(p_values)[-1] <- c("12h_p_value", "24h_p_value", "38h_p_value")
+
+
+pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/supplementary/frequency_parasite+_vein_proximity.pdf", width = 5, height =3)
+ggplot(df_veins_freq_long, aes(x = vein_proximity, y = frequency, color = timepoint)) +
+  geom_point(size = 8) +
+  labs(x = "Vein Proximity", y = "Frequency", fill = "Timepoint") +
+  scale_color_manual(values =c("#F8736D", "#00BA38", "#629CFF"))+
+  theme_minimal()
+dev.off()
+
+p_values
+
+
+```
+
+```{r, differential gene expression IHS + /IHS -, fig.height= 16, fig.width= 12}
+
+se.pb <- SetIdent(se.pb, value = "IHS_n")
+
+IHS_DEG <- FindAllMarkers(se.pb, only.pos = T)
+IHS_DEG <- subset(IHS_DEG, IHS_DEG$p_val_adj < 0.05)
+
+
+```
+
+```{r, investigate differential expression in IHS}
+
+#show IHS positive genes in heatmap
+
+gene_data <- data.frame(t(se.pb@assays$SCT@counts) , cluster = se.pb$IHS_n,check.names = F)  
+  average_data <- aggregate(.~cluster, gene_data, mean)
+  cluster_name <- average_data[,1]
+  average_data <- apply(average_data[,2:ncol(average_data)],2,as.numeric)
+  rownames(average_data) <- cluster_name #you can also give your data individual cluster names 
+  average_data <- t(average_data)
+  phmat1 <- t(scale(t(average_data)))
+  
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/supplementary/Heatmap_average_DGEA_IHS.pdf", width = 80, height = 20)  
+pheatmap(phmat1[unique(IHS_DEG$gene),], 
+         fontsize_row = 8, 
+         fontsize_col = 35, 
+         cellwidth = 200, 
+         cluster_rows = T,
+         clustering_distance_rows = "correlation",
+         #breaks = seq(-max(abs(phmat1)), max(abs(phmat1)), length.out = 1000), 
+           color = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001),
+           angle_col = "45", cluster_cols = F)
+#dev.off()
+
+```
+
+
+
+```{r, run the upper part for mouse expression data only}
+
+mus_genes <- rownames(se.parasite@assays$RNA@counts)[-grep("-pb", rownames(se.parasite@assays$RNA@counts))] # Run for infected positions only 
+se.pb_mus <- SubsetSTData(se.parasite, features = mus_genes) #subset data to only contain mouse transcripts
+se.pb_mus <- SCTransform(se.pb_mus, assay = "RNA", vars.to.regress = "dissection") #renormalize
+se.pb_mus <- RunPCA(se.pb_mus) #dimensionality reduction 
+se.pb_mus <- RunHarmony(se.pb_mus, group.by.vars = "biorep", assay.use = "SCT") #integrate biological replicates
+DimHeatmap(se.pb_mus, dims = 1:15) 
+
+se.pb_mus <- FindNeighbors(se.pb_mus, dims = 1:15, reduction = "harmony")
+se.pb_mus <- FindClusters(se.pb_mus, resolution = 0.3) #find neighbors and clusters 
+se.pb_mus <- RunUMAP(se.pb_mus,dims = 1:15, reduction = "harmony") #Run manifold reduction 
+
+
+mus_parasite <- FindAllMarkers(se.pb_mus, logfc.threshold = 0.25, only.pos = T)
+mus_parasite <- subset(mus_parasite, mus_parasite$p_val_adj < 0.05)
+#top 20 genes
+top20de <- mus_parasite %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+#top 10 genes
+top10de <- mus_parasite %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+#top 5 genes
+top5de <- mus_parasite %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC)
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/Heatmap_DGEA.pdf", width = 30, height = 15)
+DoHeatmap(se.pb_mus, features = top10de$gene, size = 4, angle = 45, group.colors = clust.cols)
+
+DimPlot(se.pb_mus, reduction = "umap"
+        #, group.by = "timepoint"
+        )
+
+DimPlot(se.pb_mus, reduction = "umap"
+        , group.by = "timepoint"
+        )
+
+ST.FeaturePlot(se.pb_mus, features = "seurat_clusters", ncol = 5, spots = which(se.pb_mus$seurat_clusters %in% 3)
+               )
+ST.FeaturePlot(se.pb_mus, features = "seurat_clusters", ncol = 5, #spots = which(se.pb_mus$seurat_clusters %in% 3)
+               )
+
+se.mus_12 <- SubsetSTData(se.pb_mus,  expression = timepoint == "12h")
+se.mus_24 <- SubsetSTData(se.pb_mus,  expression = timepoint == "24h")
+se.mus_12 <- SubsetSTData(se.pb_mus,  expression = timepoint == "12h")
+
+ST.FeaturePlot(se.mus_12, features = "seurat_clusters", ncol = 4, spots = which(se.mus_12$seurat_clusters %in% c(3,4)))
+ST.FeaturePlot(se.mus_24, features = "seurat_clusters", ncol = 4, spots = which(se.mus_24$seurat_clusters %in% c(3,4)))
+ST.FeaturePlot(se.mus_12, features = "seurat_clusters", ncol = 4, spots = which(se.mus_12$seurat_clusters %in% c(3,4)))
+
+
+
+```
+
+
+```{r, make heatmap with averaged expression, fig.width = 50, fig.height = 50}
+
+gene_data <- data.frame(t(se.pb@assays$SCT@counts) , cluster = se.pb$seurat_clusters,check.names = F)  
+  average_data <- aggregate(.~cluster, gene_data, mean)
+  cluster_name <- average_data[,1]
+  average_data <- apply(average_data[,2:ncol(average_data)],2,as.numeric)
+  rownames(average_data) <- cluster_name #you can also give your data individual cluster names 
+  average_data <- t(average_data)
+  phmat1 <- t(scale(t(average_data)))
+  
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/ASTMH_poster/Heatmap_average_DGEA.pdf", width = 80, height = 20)  
+pheatmap(phmat1[unique(top20de$gene),], 
+         fontsize_row = 8, 
+         fontsize_col = 35, 
+         cellwidth = 200, 
+         cluster_rows = F,
+         clustering_distance_rows = "correlation",breaks = seq(-max(abs(phmat1)), max(abs(phmat1)), length.out = 1000), 
+           color = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001),
+           angle_col = "45", cluster_cols = F)
+#dev.off()
+
+```
+
+
+Apart from running this unsupervised analysis in which we normalized the data and identified clusters across tissue which exhibit similar expression profiles, which we can use for annotating these clusters to a spatial function, we can also run supervised analysis. For this we can subset our data and investigate specific time points or look at certain spatial aspects of our data, such as presence of a parasite or other morphological structures. 
+
+Here we subset our data based on time point and infection and find differential expressed genes between infected and control sections. We further determine genes which are shared between all timepoints in infected vs controls conditions as well as those that are unique to each condition. 
+
+```{r, inspect expression of genes based on timepoint in infected samples}
+
+se.pb <- SetIdent(se.pb,  value = "seurat_clusters")
+
+se.12h <- SubsetSTData(se.pb, expression =  timepoint == "12h")
+se.24h <- SubsetSTData(se.pb, expression =  timepoint == "24h")
+se.38h <- SubsetSTData(se.pb, expression =  timepoint == "38h")
+
+se.12h <- SetIdent(se.12h, value = "infection")
+se.24h <- SetIdent(se.24h, value = "infection")
+se.38h <- SetIdent(se.38h, value = "infection")
+
+pb_12deg <- FindAllMarkers(se.12h, only.pos = T, logfc.threshold = 0.5)
+pb_12deg <- subset(pb_12deg, pb_12deg$p_val_adj < 0.01)
+nrow(pb_12deg)
+pb_12deg <- subset(pb_12deg, pb_12deg$cluster == "infected")
+pb_12deg$cluster <- paste0(pb_12deg$cluster, "_", "12h")
+#write.table(pb_12deg, "/home/st-analysis_home/franziska.hildebra/analysis/res/tables_supplementary_data/pb_12h_deg.csv", sep = ",", quote = F, row.names = F, col.names = colnames(pb_12deg))
+
+pb_24deg <- FindAllMarkers(se.24h, only.pos = T, logfc.threshold = 0.5)
+pb_24deg <- subset(pb_24deg, pb_24deg$p_val_adj < 0.01)
+nrow(pb_24deg)
+pb_24deg <- subset(pb_24deg, pb_24deg$cluster == "infected")
+pb_24deg$cluster <- paste0(pb_24deg$cluster, "_", "24h")
+#write.table(pb_24deg, "/home/st-analysis_home/franziska.hildebra/analysis/res/tables_supplementary_data/pb_24h_deg.csv", sep = ",", quote = F, row.names = F, col.names = colnames(pb_24deg))
+
+pb_38deg <- FindAllMarkers(se.38h, only.pos = T, logfc.threshold = 0.5)
+pb_38deg <- subset(pb_38deg, pb_38deg$p_val_adj < 0.01)
+nrow(pb_38deg)
+pb_38deg <- subset(pb_38deg, pb_38deg$cluster == "infected")
+pb_38deg$cluster <- paste0(pb_38deg$cluster, "_", "38h")
+#write.table(pb_38deg, "/home/st-analysis_home/franziska.hildebra/analysis/res/tables_supplementary_data/pb_38h_deg.csv", sep = ",", quote = F, row.names = F, col.names = colnames(pb_38deg))
+
+
+print(Reduce(intersect, list(pb_12deg$gene, pb_24deg$gene, pb_38deg$gene))) #shared genes between conditions across all timepoints
+
+unique_pb_t <- list(A = pb_12deg$gene,B = pb_24deg$gene , C = pb_38deg$gene)
+
+unique_pb_t <- lapply(1:length(unique_pb_t), function(n) setdiff(unique_pb_t[[n]], unlist(unique_pb_t[-n])))
+
+print(unique_pb_t) #list of unique marker genes for each time point
+
+```
+Now we want to further evaluate whether these genes are over-represented in other data sets. Here we use the data published by [https://www.nature.com/articles/nm.3424](Liehl et al.) which identified a number of interferon stimulated genes which have been implicated with an infection with *Plasmodium*.
+
+```{r, compare to ISGs}
+
+#See which genes identify as ISGs
+all_genes <- unlist(c(unique_pb_t[1], unique_pb_t[2], unique_pb_t[3], Reduce(intersect, list(pb_12deg$gene, pb_24deg$gene, pb_38deg$gene))))
+
+isg_genes_mota <- readLines("/home/st-analysis_home/franziska.hildebra/analysis/res/list_INGs_MMota.txt")
+
+setdiff(all_genes, isg_genes_mota)
+
+intersect(unlist(unique_pb_t[3]), c(intersect(all_genes, isg_genes_mota)))
+setdiff(unlist(unique_pb_t[3]), c(intersect(all_genes, isg_genes_mota)))
+
+intersect(unlist(unique_pb_t[1]), c(intersect(all_genes, isg_genes_mota)))
+setdiff(unlist(unique_pb_t[1]), c(intersect(all_genes, isg_genes_mota)))
+
+intersect(Reduce(intersect, list(pb_12deg$gene, pb_24deg$gene, pb_38deg$gene)), isg_genes_mota) #list of genes that intersect with the dataset
+
+```
+
+We can now visualize these genes in a heatmap across all conditions. We find the strongest differences in 12 and 38 hours post infection. 
+
+```{r, differential host gene expression in infected versus non-infected tissue areas, fig.width= 8, fig.height= 10}
+
+#make an aggregated heatmap: 
+parasite_time_mat <- hmat_pb(t(as.matrix(se.pb@assays$SCT@counts)), meta = se.pb$condition)
+parasite_time_mat <- parasite_time_mat[, c( "12h infected", "24h infected", "38h infected", "12h control", "24h control", "38h control")]
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig3/DEG_timepoints_infection_38h.pdf", width = 20, height = 10)
+phmat_simple(parasite_time_mat, seed = c(unique_pb_t[[3]]))
+#dev.off()
+
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig3/DEG_timepoints_infection_12h.pdf", width = 20, height = 10)
+phmat_simple(parasite_time_mat, seed = c(unique_pb_t[[1]]))
+#dev.off()
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/supplementary/DEG_timepoints_infection_unique_all.pdf", width = 20, height = 30)
+phmat_simple(parasite_time_mat, seed = c(unique_pb_t[[1]], unique_pb_t[[2]], unique_pb_t[[3]])) ## Look at all unique genes 
+#dev.off()
+
+
+
+```
+
+We can now look with more detail into certain gene clusters, for example those that show the highest expression in only one of the time points
+
+```{r, access the cluster assignments of the heatmaps}
+
+##12h 
+
+pheat_12h_inf <- phmat_simple(parasite_time_mat, seed = c(unique_pb_t[[1]]))
+# Extract the dendrogram object
+dend_12h_inf <- pheat_12h_inf$tree_row
+# Extract the cluster assignments for each row
+clusters_dend_12h_inf <- cutree(dend_12h_inf, k = 2)
+clusters_dend_12h_inf
+
+##24h 
+
+pheat_24h_inf <- phmat_simple(parasite_time_mat, seed = c(unique_pb_t[[2]]))
+# Extract the dendrogram object
+dend_24h_inf <- pheat_24h_inf$tree_row
+# Extract the cluster assignments for each row
+clusters_dend_24h_inf <- cutree(dend_24h_inf, k = 2)
+clusters_dend_24h_inf
+
+
+##38h 
+
+pheat_38h_inf <- phmat_simple(parasite_time_mat, seed = c(unique_pb_t[[3]]))
+# Extract the dendrogram object
+dend_38h_inf <- pheat_38h_inf$tree_row
+# Extract the cluster assignments for each row
+clusters_dend_38h_inf <- cutree(dend_38h_inf, k = 4)
+clusters_dend_38h_inf
+
+```
+
+Now we can make whole gene expression scores of this smaller selection of genes and visualize them in the tissue. 
+
+```{r, Add Module scores of strongest upregulation patterns on tissue}
+
+#extract genes of interest for 12h 
+select_12h <- list(names(clusters_dend_12h_inf[clusters_dend_12h_inf %in% 2]))
+#AddModulescore of these genes 
+se.pb <- AddModuleScore(
+  object = se.pb,
+  features = select_12h,
+  ctrl = 100,
+  name = 'DEG_inf_12h'
+)
+
+#extract genes of interest for 24h 
+select_24h <- list(names(clusters_dend_24h_inf[clusters_dend_24h_inf %in% c(1,2)]))
+#AddModulescore of these genes 
+se.pb <- AddModuleScore(
+  object = se.pb,
+  features = select_24h,
+  ctrl = 100,
+  name = 'DEG_inf_24h'
+)
+
+#extract genes of interest for 12h 
+select_38h <- list(names(clusters_dend_38h_inf[clusters_dend_38h_inf %in% c(2)]))
+#AddModulescore of these genes 
+se.pb <- AddModuleScore(
+  object = se.pb,
+  features = select_38h,
+  ctrl = 100,
+  name = 'DEG_inf_38h'
+)
+
+se.12h <- SubsetSTData(se.pb, expression =  timepoint == "12h")
+se.24h <- SubsetSTData(se.pb, expression =  timepoint == "24h")
+se.38h <- SubsetSTData(se.pb, expression =  timepoint == "38h")
+
+##Plot scores on tissue
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig3/expression_tissue_DEG12h_inf_ctrl.pdf")
+ST.FeaturePlot(se.12h, features = "DEG_inf_12h1", ncol = 5, cols = colorRampPalette(c("blue4","white","darkorange"))(1001), center.zero = T, indices = c(2,11))
+#dev.off()
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig3/expression_tissue_DEG24h_inf_ctrl.pdf")
+ST.FeaturePlot(se.24h, features = "DEG_inf_24h1", ncol = 5, cols = colorRampPalette(c("blue4","white","darkorange"))(1001), center.zero = T, indices = c(1,8))
+#dev.off()
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig3/expression_tissue_DEG38h_inf_ctrl.pdf")
+ST.FeaturePlot(se.38h, features = "DEG_inf_38h1", ncol = 5, cols =  colorRampPalette(c("blue4","white","darkorange"))(1001), center.zero = T, indices = c(4,9))
+#dev.off()
+
+```
+
+```{r, expression of IHS+, parasite + along central/portal }
+
+df_distances <- data.frame(dist_portal = se.pb$dist_comp_ann_portal_um, dist_central = se.pb$dist_comp_ann_central_um, IHS = se.pb$IHS_n, timepoint = se.pb$timepoint)
+df_distances <- na.omit(df_distances)
+
+kw_test_central <- kruskal.test(dist_central ~ IHS, data = df_distances)
+kw_test_portal <- kruskal.test(dist_portal ~ IHS, data = df_distances)
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/supplementary/150323_IHS_portal_boxplot.pdf")
+ggplot(na.omit(df_distances), aes(x = IHS, y = dist_portal)) + 
+  geom_boxplot() +
+  theme_bw()
+#dev.off()
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/supplementary/150323_IHS_central_boxplot.pdf")
+df_distances <- na.omit(df_distances)
+ggplot(na.omit(df_distances), aes(x = IHS, y = dist_central)) + 
+  geom_boxplot() + 
+  theme_bw()
+#dev.off()
+
+```
+
+```{r, parasite + vs negative spots zonation - raincloud plots}
+
+#parasite + timepoint
+
+df_distances <- data.frame(dist_portal = se.pb$dist_comp_ann_portal_um, dist_central = se.pb$dist_comp_ann_central_um, parasite = se.pb$parasite_n, timepoint = se.pb$timepoint)
+
+df_distances <- na.omit(df_distances)
+df_distances <- df_distances[df_distances$parasite == "parasite+",]
+
+ggplot(df_distances, aes(x = timepoint, y = dist_portal)) + 
+  geom_boxplot()
+
+
+ggboxplot(df_distances, x = "timepoint", y = "dist_portal", 
+          color = "timepoint", palette = "jco") +
+  stat_compare_means(aes(label = after_stat(p.format)), method = "t.test", paired = FALSE,
+                     label.y = max(df_distances$dist_portal))
+
+
+###With statistics
+
+library(dunn.test)
+
+# Perform Kruskal-Wallis test
+kw_test <- kruskal.test(dist_portal ~ timepoint, data = na.omit(df_distances))
+
+# Perform Dunn's test for multiple comparisons
+dunn_test <- dunn.test(na.omit(df_distances)$dist_portal, na.omit(df_distances)$timepoint,
+          method = "bonferroni")
+
+# Create raincloud plot for portal
+
+pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig3/raincloud_parasite_portal.pdf")
+ggplot(na.omit(df_distances), aes(x = factor(timepoint, levels = rev(unique(timepoint))), y = dist_portal, fill = factor(timepoint))) + 
+  
+  ggdist::stat_halfeye(
+    adjust = 0.5, 
+    justification = -.2,
+    .width = 0, 
+    point.colour = NA
+    
+    
+  ) +
+  
+  geom_boxplot(
+    width = .12, 
+    alpha = 0.5, 
+    outlier.colour = NA
+  ) +
+
+  
+  ggdist::stat_dots(
+    
+    side = "left") + 
+
+  coord_flip() +
+  theme_bw() + 
+  theme(legend.position = "none")+ 
+  labs (x = "timepoint (p.i.)", 
+        y = "distance to portal vein")
+
+dev.off()
+
+# Create raincloud plot for central
+
+# Perform Kruskal-Wallis test
+kw_test <- kruskal.test(dist_central ~ timepoint, data = na.omit(df_distances))
+
+# Perform Dunn's test for multiple comparisons
+dunn_test <- dunn.test(df_distances$dist_central, na.omit(df_distances)$timepoint,
+          method = "bonferroni")
+
+
+pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/fig3/raincloud_parasite_central.pdf")
+
+ggplot(na.omit(df_distances), aes(x = factor(timepoint, levels = rev(unique(timepoint))), y = dist_central, fill = factor(timepoint))) + 
+  
+  ggdist::stat_halfeye(
+    adjust = 0.5, 
+    justification = -.2,
+    .width = 0, 
+    point.colour = NA
+    
+    
+  ) +
+  
+  geom_boxplot(
+    width = .12, 
+    alpha = 0.5, 
+    outlier.colour = NA
+  ) +
+  
+  ggdist::stat_dots(
+    
+    side = "left") + 
+  
+  coord_flip() +
+  theme_bw() + 
+  theme(legend.position = "none")+ 
+  labs (x = "timepoint (p.i.)", 
+        y = "distance to central vein")
+
+dev.off()
+
+```
+
+
+Maybe we find a relationship between expression of these modules to zonation 
+
+```{r, correlation between distance to vein and module expression}
+
+dist_12h_central <- na.omit(se.12h$dist_comp_ann_central_um)
+dist_12h_portal <- na.omit(se.12h$dist_comp_ann_portal_um)
+
+deg_select_central <- se.12h$DEG_inf_12h1[names(se.12h$DEG_inf_12h1) %in% names(dist_12h_central)]
+deg_select_portal <- se.12h$DEG_inf_12h1[names(se.12h$DEG_inf_12h1) %in% names(dist_12h_portal)]
+
+central_df <- data.frame(central_dist = dist_12h_central, Module_Score = deg_select_central)
+portal_df <-  data.frame(portal_dist = dist_12h_portal, Module_Score = deg_select_portal)
+cor(x = dist_12h_central, y = deg_select_central, method = "spearman")
+cor(x = dist_12h_portal, y = deg_select_portal, method = "spearman")
+
+ggplot(data = portal_df, aes(portal_dist, Module_Score)) + 
+  geom_point()
+
+ggplot(data = central_df, aes(central_dist, Module_Score)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = F, color = "red") + 
+  annotate("text", x = min(df$central_dist), y = max(df$Module_Score), 
+           label = paste("Correlation:", corr_coef, "\np-value:", p_value)) +
+             theme_bw()
+
+
+```
+
+
+Based on the hypothesis that the differential expressed genes are related to clearing of the parasite we might be able to distinguish successful and "abortive" parasites. To this end We can subset spots in close proximity to the parasite and with a high average expression of the module scores identified above. Simultaneously, we can have a look at the spots with low expression of these module scores. 
+
+```{r, identify sets of parasites}
+
+#figure out what the values of module score expression are in the data 
+summary(se.12h$DEG_inf_12h1)
+#Now we define all spots above and below the median and within 200µm of the parasite position for each timepoint 
+##First we subset our data to contain only spots within 200 µm of a parasite (That we already have as the parasite_n column)
+se.12h.p <- SubsetSTData(se.12h, expression = parasite_n %in% "parasite+")
+se.24h.p <- SubsetSTData(se.24h, expression = parasite_n %in% "parasite+")
+se.12h.p <- SubsetSTData(se.12h, expression = parasite_n %in% "parasite+")
+
+##Now we can make an additional annnotation column which we will call DEG_inf_ann
+
+se.12h.p$DEG_inf_ann <- ifelse(se.12h.p$DEG_inf_24h1 > median(se.12h.p$DEG_inf_12h1), paste0("DEG_high"), paste0("DEG_low"))
+ST.FeaturePlot(se.12h.p, features = "DEG_inf_ann", ncol = 4)
+
+se.24h.p$DEG_inf_ann <- ifelse(se.24h.p$DEG_inf_24h1 > median(se.24h.p$DEG_inf_24h1), paste0("DEG_high"), paste0("DEG_low"))
+ST.FeaturePlot(se.24h.p, features = "DEG_inf_ann", ncol = 4)
+VlnPlot(se.24h.p, features = "DEG_inf_24h1", group.by = "DEG_inf_ann")
+
+se.12h.p$DEG_inf_ann <- ifelse(se.12h.p$DEG_inf_12h1 > median(se.12h.p$DEG_inf_12h1), paste0("DEG_high"), paste0("DEG_low"))
+ST.FeaturePlot(se.12h.p, features = "DEG_inf_ann", ncol = 4)
+VlnPlot(se.12h.p, features = "DEG_inf_12h1", group.by = "DEG_inf_ann")
+
+
+```
+
+
+Lastly we can combine the unsupervised and supervised analysis and evaluate 
+
+Looking at the UMAP distributions it is difficult to decipher a trend of cluster associations We know that the 12h and 24h time points have a higher proportion of the cluster which shows high expression of inflammation markers. 
+
+```{r, bargraph or sankey diagram for cluster associations}
+
+# sapply function to give vector for each cluster and condition and create a dataframe with the information 
+clusters <- c("0","1","2", "3", "4", "5", "6", "7", "8", "9", "10", "11")
+
+
+
+control_12h_perCluster <- sapply(X = clusters, function(cluster) {
+  length(which(se.pb@meta.data$condition == "12h control" & se.pb@meta.data$seurat_clusters == cluster))
+})
+
+control_24h_perCluster <- sapply(X = clusters, function(cluster) {
+  length(which(se.pb@meta.data$condition == "24h control" & se.pb@meta.data$seurat_clusters == cluster))
+})
+
+control_38h_perCluster <- sapply(X = clusters, function(cluster) {
+  length(which(se.pb@meta.data$condition == "38h control" & se.pb@meta.data$seurat_clusters == cluster))
+})
+
+infected_12h_perCluster <- sapply(X = clusters, function(cluster) {
+  length(which(se.pb@meta.data$condition == "12h infected" & se.pb@meta.data$seurat_clusters == cluster))
+})
+
+infected_24h_perCluster <- sapply(X = clusters, function(cluster) {
+  length(which(se.pb@meta.data$condition == "24h infected" & se.pb@meta.data$seurat_clusters == cluster))
+})
+
+infected_38h_perCluster <- sapply(X = clusters, function(cluster) {
+  length(which(se.pb@meta.data$condition == "38h infected" & se.pb@meta.data$seurat_clusters == cluster))
+})
+
+
+
+n1 <- c("0","1","2", "3", "4", "5", "6", "7", "8", "9", "10", "11")
+identpercluster <- data.frame(n1, control_12h_perCluster, control_24h_perCluster, control_38h_perCluster, infected_12h_perCluster, infected_24h_perCluster, infected_38h_perCluster)
+colnames(identpercluster) <- c("cluster", "12h control", "24h control", "38h control", "12h infected", "24h infected", "38h infected")
+identpercluster <- gather(identpercluster, key = "identity", value = "cellcount", -cluster)
+
+#calculate percentages using an apply function 
+percent <- function(x){
+  ((x/sum(identpercluster$cellcount))*100)
+}
+
+identpercluster$percent <- identpercluster[,3]/(sum(identpercluster$cellcount))*100
+
+#Plot results:
+#png("~/Dropbox/shared_ankarklev/Franzi-analysis/Results-FiguresAndTables/originialIDpercluster_percent.png", width = 20, height = 10, unit = "cm", res = 300)
+print(ggplot(identpercluster, aes(factor(cluster, levels = c(0,1,2,3,4,5,6,7,8,9,10,11)), percent, fill= identity)) +
+  geom_bar(position = "stack", stat = "identity") +
+  xlab("") +
+  ylab ("relative proportion of spots") + 
+  scale_fill_manual(values = c("#FFCC6A","#F8766D", "#A3A500","#00BF7D","#E76BF3","#00B0F6")) + 
+  theme_classic() + 
+  theme(legend.title = element_blank()))
+
+
+###Normalize to each cluster
+
+#calculate percentages of individual clusters with normalizing to the individual cluster 
+
+c0.p <- subset(identpercluster, cluster == "0")
+c1.p <- subset(identpercluster, cluster == "1")
+c2.p <- subset(identpercluster, cluster == "2")
+c3.p <- subset(identpercluster, cluster == "3")
+c4.p <- subset(identpercluster, cluster == "4")
+c5.p <- subset(identpercluster, cluster == "5")
+c6.p <- subset(identpercluster, cluster == "6")
+c7.p <- subset(identpercluster, cluster == "7")
+c8.p <- subset(identpercluster, cluster == "8")
+c9.p <- subset(identpercluster, cluster == "9")
+c10.p <- subset(identpercluster, cluster == "10")
+c11.p <- subset(identpercluster, cluster == "11")
+
+cp.l <- c(c0.p$cellcount,c1.p$cellcount, c2.p$cellcount, c3.p$cellcount,c4.p$cellcount, c5.p$cellcount, c6.p$cellcount, c7.p$cellcount, c8.p$cellcount,c9.p$cellcount, c10.p$cellcount, c11.p$cellcount )
+
+c0.p$percent.cluster <-  c0.p$cellcount/sum(c0.p$cellcount)*100
+c1.p$percent.cluster <-  c1.p$cellcount/sum(c1.p$cellcount)*100
+c2.p$percent.cluster <-  c2.p$cellcount/sum(c2.p$cellcount)*100
+c3.p$percent.cluster <-  c3.p$cellcount/sum(c3.p$cellcount)*100
+c4.p$percent.cluster <-  c4.p$cellcount/sum(c4.p$cellcount)*100
+c5.p$percent.cluster <-  c5.p$cellcount/sum(c5.p$cellcount)*100
+c6.p$percent.cluster <-  c6.p$cellcount/sum(c6.p$cellcount)*100
+c7.p$percent.cluster <-  c7.p$cellcount/sum(c7.p$cellcount)*100
+c8.p$percent.cluster <-  c8.p$cellcount/sum(c8.p$cellcount)*100
+c9.p$percent.cluster <-  c9.p$cellcount/sum(c9.p$cellcount)*100
+c10.p$percent.cluster <-  c10.p$cellcount/sum(c10.p$cellcount)*100
+c11.p$percent.cluster <-  c11.p$cellcount/sum(c11.p$cellcount)*100
+identpercluster1 <- dplyr::bind_rows(c0.p, c1.p, c2.p,c3.p, c4.p, c5.p, c6.p, c7.p, c8.p, c9.p, c10.p, c11.p)
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/res/plots/figures/supplementary/percentage_clusters_condition.pdf")
+  print(ggplot(identpercluster1, aes(factor(cluster, levels = c(0,1,2,3,4,5,6,7,8,9,10,11)), percent.cluster, fill= identity)) +
+  geom_bar(position = "stack", stat = "identity") +
+  xlab("") +
+  ylab ("cells of original condition per cluster [%]") + 
+  scale_fill_manual(values = c("#FFCC6A","#F8766D", "#A3A500","#00BF7D","#E76BF3","#00B0F6")) + 
+  theme_classic() + 
+  theme(legend.title = element_blank()))
+#dev.off()
+
+```

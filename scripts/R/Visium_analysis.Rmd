@@ -1,0 +1,352 @@
+---
+title: "Visium analysis"
+output: html_notebook
+---
+
+
+```{r, define your working directory (path to github repo), results='hide', message=FALSE}
+
+repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas"
+
+```
+
+Call all the functions created for this analysis 
+```{r, call funtions, results='hide'}
+
+source(paste0(repo,"/scripts/FUNTIONS.R"))
+
+```
+
+
+```{r, load libraries}
+
+library(hdf5r)
+library(STutility)
+library(clusterProfiler)
+library(gprofiler2)
+
+```
+
+```{r, prepare data}
+
+#set paths to samples (create vectors)
+
+samples <- c(paste0(repo,"/data/Visium/V10S29-135/V10S29-135_A1/output_data/V10S29-135_A1/outs/raw_feature_bc_matrix.h5"), paste0(repo,"/data/V10S29-135/V10S29-135_B1/output_data/V10S29-135_B1/outs/raw_feature_bc_matrix.h5"),paste0(repo,"/home/st-analysis_home/franziska.hildebra/Visium/V10S29-135/V10S29-135_C1/output_data/V10S29-135_C1/outs/raw_feature_bc_matrix.h5"), paste0(repo,"/data/Visium/V10S29-135/V10S29-135_D1/output_data/V10S29-135_D1/outs/raw_feature_bc_matrix.h5"))
+
+spotfiles <- c(paste0(repo,"/data/Visium/V10S29-135/V10S29-135_A1/output_data/V10S29-135_A1/outs/spatial/tissue_positions_list.csv"), paste0(repo, "/data/Visium/V10S29-135/V10S29-135_B1/output_data/V10S29-135_B1/outs/spatial/tissue_positions_list.csv"), paste0(repo,"/data/Visium/V10S29-135/V10S29-135_C1/output_data/V10S29-135_C1/outs/spatial/tissue_positions_list.csv"), paste0(repo,"/data/Visium/V10S29-135/V10S29-135_D1/output_data/V10S29-135_D1/outs/spatial/tissue_positions_list.csv"))
+
+imgs <- c(paste0(repo,"/data/Visium/V10S29-135/V10S29-135_A1/output_data/V10S29-135_A1/outs/spatial/tissue_hires_image.png"), "/data/Visium/V10S29-135/V10S29-135_B1/output_data/V10S29-135_B1/outs/spatial/tissue_hires_image.png", "/data/Visium/V10S29-135/V10S29-135_C1/output_data/V10S29-135_C1/outs/spatial/tissue_hires_image.png", "/data/Visium/V10S29-135/V10S29-135_D1/output_data/V10S29-135_D1/outs/spatial/tissue_hires_image.png")
+
+json <- c("/data/Visium/V10S29-135/V10S29-135_A1/output_data/V10S29-135_A1/outs/spatial/scalefactors_json.json", "/data/Visium/V10S29-135/V10S29-135_B1/output_data/V10S29-135_B1/outs/spatial/scalefactors_json.json", "/data/Visium/V10S29-135/V10S29-135_C1/output_data/V10S29-135_C1/outs/spatial/scalefactors_json.json", "/data/Visium/V10S29-135/V10S29-135_D1/output_data/V10S29-135_D1/outs/spatial/scalefactors_json.json")
+
+sample_id <- c("A1", "B1", "C1", "D1")
+
+timepoint <- c("38h", "24h", "12h", "38h")
+
+platform <- c(rep("Visium",4))
+
+infoTable <- data.frame(samples,spotfiles,imgs,json, sample_id, timepoint, platform) 
+
+head(infoTable)
+
+#load annotation 
+
+ann <- read.table("/data/annotations/mus_pb_annotation_seurat.tsv", header = T, sep = "\t")
+ann$gene_name <- sub("-pb", "", ann$gene_name)
+
+
+```
+
+```{r, make object}
+
+v_se <- InputFromTable(infotable = infoTable, 
+                       minGenesPerSpot = 5,
+                       minUMICountsPerSpot = 100,
+                       platform = "Visium",
+                       disable.subset = F
+                       )
+
+ST.FeaturePlot(v_se, features = c("nCount_RNA", "nFeature_RNA"))
+
+#look at Plasmodium specific expression in total tissue (including background spots)
+
+pb.annotation <- read.table("/data/annotations/pb_annotation_seurat.tsv",header = T, sep = "\t")
+pb.annotation$gene_name <- sub("-pb", "", pb.annotation$gene_name)
+pb.mat <- as.matrix(v_se@assays$RNA@counts)
+pb.mat <- subset(pb.mat, rownames(pb.mat) %in% pb.annotation$gene_name)
+pb.sum <- as.data.frame(colSums(pb.mat))
+
+#add data to object
+v_se[["nCount_pb"]] <- pb.sum
+
+ST.FeaturePlot(v_se, features = c("nCount_pb"))
+
+```
+
+```{r, select infected and control tissue}
+
+v_se <- LoadImages(v_se, time.resolve = F, xdim = 2000)
+v_se <- ManualAnnotation(v_se)
+
+#copy the column labels to a new column called condition: 
+
+v_se$condition <- v_se$labels
+
+#remove spots outside of the tissue (with the label "default")
+
+v_se <- SubsetSTData(v_se, spots = rownames(subset(v_se[[]], condition %in% c("control", "infected"))))
+
+```
+
+```{r, filter counts}
+
+v_se <- v_se[-grep(pattern = c("mt-"), x = rownames(v_se)), ]
+v_se <- v_se[-grep(pattern = c("Gm"), x = rownames(v_se)), ]
+v_se <- v_se[-grep(pattern = c("Lars2"), x = rownames(v_se)), ]
+v_se <- v_se[-grep(pattern = c("Mup"), x = rownames(v_se)), ]
+#keep all mouse protein coding genes and the plasmodium genes in the data 
+protein_coding <- subset(ann, gene_biotype == "protein_coding" | species == "p.berghei")$gene_name
+protein_coding_match <- intersect(rownames(v_se), protein_coding)
+# Keep protein coding genes
+v_se <- v_se[which(rownames(v_se) %in% protein_coding_match), ]
+
+v_se$dissection <- ifelse(v_se$timepoint %in% c("24h"), paste("evening"), paste("morning"))
+
+
+```
+
+
+
+```{r, assess which spots have the highest counts of plasmodium transcripts}
+
+pb.annotation <- read.table("/data/annotations/pb_annotation_seurat.tsv",header = T, sep = "\t")
+pb.annotation$gene_name <- sub("-pb", "", pb.annotation$gene_name)
+pb.mat <- as.matrix(v_se@assays$RNA@counts)
+pb.mat <- subset(pb.mat, rownames(pb.mat) %in% pb.annotation$gene_name)
+pb.sum <- as.data.frame(colSums(pb.mat))
+
+#add data to object
+v_se[["nCount_pb"]] <- pb.sum
+
+#plot data in a new dataframe
+colnames(pb.sum) <- c("nCount_pb")
+pb.sum <- subset(pb.sum, pb.sum > 0)
+pb.sum$spot <- rownames(pb.sum)
+hist(log10(pb.sum$nCount_pb))
+
+                                                
+pb.sum$spot <- factor(pb.sum$spot,                                    
+                  levels = pb.sum$spot[order(pb.sum$nCount_pb, decreasing = TRUE)])
+
+ggplot(pb.sum, aes(spot,log10(nCount_pb))) + 
+  geom_col()
+
+pb.sum$log10 <- log10(pb.sum$nCount_pb)
+pb.sum <- subset(pb.sum, pb.sum$log10 > 0)
+pb.sum$log2 <- log2(pb.sum$nCount_pb)
+
+
+#add sample Id to plots and compare them, run boxplots for all samples, then select spots in the upper quantile
+#plot these spots on the tissue + compare with the distribution of the remaining parasites
+
+ids <- as.character(levels(as.factor(v_se$sample_id)))
+#get rownames for each samples and subset
+
+sub <- lapply(ids, function(x){
+subset(colnames(v_se), v_se$sample_id == x)
+})
+#get data for samples
+sums <- lapply(sub, function(x){
+  subset(pb.sum, pb.sum$spot %in% x)})
+
+sums[[1]]$sample_id <- paste(1)
+sums[[2]]$sample_id <- paste(2)
+#sums[[3]]$sample_id <- paste(3)
+sums[[4]]$sample_id <- paste(4)
+
+library (plyr)
+sums1 <- ldply(sums, data.frame)
+
+ ggplot(sums1, aes(spot,nCount_pb, fill=sample_id)) + 
+  geom_col() + 
+  ylab("Number of P. Berghei UMIs") 
+ 
+#plot the spots and number of parasite transcripts for each sample
+
+plot.l <- lapply(sums, function (x){
+ ggplot(x, aes(spot,nCount_pb)) + 
+  geom_col() + 
+  ylab("Number of P. Berghei UMIs")
+})
+
+library(ggpubr)
+ggarrange(plotlist = plot.l, ncol = 2, nrow = 2)
+
+
+```
+
+
+```{r, add Plasmodium count to metadata }
+
+ST.FeaturePlot(v_se, features = c("nCount_pb"))
+
+FeatureOverlay(v_se, features = "seurat_clusters",sampleids = 3, 
+               spots = rownames(subset(v_se[[]], seurat_clusters == c(1:3,5))),
+               pt.size = 1.5, add.alpha = F)
+
+
+```
+
+```{r, normalize and run dimensionality reduction, fig.width= 20, fig.height=4}
+
+v_se <- SCTransform(v_se, vars.to.regress = "dissection")
+
+v_se <- RunPCA(v_se)
+#se.pb <- RunICA(se.pb)
+v_se <- RunHarmony(v_se, group.by.vars = c("sample_id", "condition"), assay.use = "SCT")
+
+DimPlot(v_se, reduction = "harmony", pt.size = 0.6, group.by = "timepoint") +
+        theme(axis.ticks = element_blank(), axis.text = element_blank(), axis.title = element_blank(),)
+
+
+```
+
+```{r, dimensionalty reduction and clustering}
+
+v.col.c <- c( "#A2CD5A","#1111cc","#fcca46","#B23AEE", "#62b6cb", "#ae2012", "#E9967A", "#ee6123", "#005f73", "#76EEC6")
+
+  
+  
+v_se <- FindNeighbors(v_se, dims = 1:25, reduction = "harmony", verbose = F)
+v_se <- FindClusters(v_se, verbose = F, resolution = 0.3)
+head(Idents(v_se), 5)
+
+v_se <- RunUMAP(v_se, dims = 1:25, reduction = "harmony", min.dist = 0.3, spread = 0.6)
+
+#png("res_R/clusters_time_infection.png", width = 35, height = 20, res = 300, units = "cm")
+DimPlot(v_se, reduction = "umap", group.by = "seurat_clusters")
+DimPlot(v_se, reduction = "umap", group.by = "seurat_clusters", ncol = 6, split.by = "sample_id")
+DimPlot(v_se, reduction = "umap", group.by = "seurat_clusters", ncol = 6, split.by = "timepoint")
+DimPlot(v_se, reduction = "umap", group.by = "seurat_clusters", ncol = 6, split.by = "condition")
+v_se$t_condition <- paste0(v_se$timepoint,"_", v_se$condition)
+DimPlot(v_se, reduction = "umap", group.by = "seurat_clusters", ncol = 6, split.by = "t_condition")
+
+deg_v <- FindAllMarkers(v_se, logfc.threshold = 0.25, only.pos = T)
+deg_v <- subset(deg_v, deg_v$p_val_adj < 0.05)
+
+
+top20de <- deg %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+top5de <- deg %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC)
+DoHeatmap(v_se, features = top5de$gene, size = 4, angle = 45)
+
+
+ST.FeaturePlot(v_se, features = "seurat_clusters", cols = v.col.c, ncol = 2, pt.size = 1)
+ST.FeaturePlot(v_se, features = c("Glul"),  ncol = 2, pt.size = 1)
+ST.FeaturePlot(v_se, features = c("Sds"),  ncol = 2, pt.size = 1)
+
+
+ST.FeaturePlot(v_se, features = "t_condition", ncol = 2)
+FeatureOverlay(v_se, features = "seurat_clusters", cols = v.col.c, sampleids = c(1:4), ncols = 2)
+
+ST.DimPlot(v_se)
+
+ST.FeaturePlot(v_se, features = "seurat_clusters", spots = rownames(subset(v_se[[]], seurat_clusters == c(9))), ncol = 4)
+
+```
+
+```{r, visualize plasmodium reads on the data}
+
+#correlate expression of plasmodium genes and genes from cluster9 (immune activation)
+
+unique.set <-c(rownames(deg[deg$cluster %in% c(5,8),]), rownames(pb.mat))
+unique.set <- (unique.set[! unique.set %in% c("PBANKA-1001000")])
+
+i <- subset(as.data.frame(v_se@assays$SCT@counts), rownames(v_se@assays$SCT@counts) %in% unique.set)
+dim(i)
+i <- t(as.matrix(i))
+
+pb.cor <- cor(i)
+
+corrplot(pb.cor,method = "square", order = "hclust", tl.col = "black", tl.cex = 0.7)
+
+```
+
+```{r, gene set enrichment analysis}
+
+
+g <- gost(query = deg[deg$cluster == 0,]$gene, organism = "mmusculus", significant = T, sources = "GO:BP")
+
+g$result
+
+ggplot(head(g$result,40), aes(reorder(term_name, -log10(p_value)), -log10(p_value), fill = -log10(p_value))) + geom_bar(stat = "identity", color = "black") +
+  coord_flip() +
+  scale_fill_gradientn(name = "Enrichment Score",colours =   RColorBrewer::brewer.pal(n = 9, name = "YlGnBu")) + 
+  scale_y_continuous() +
+  xlab("Biological Process")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10))
+
+
+```
+
+Compare to parasite presence 
+investigate expression in proximity to a parasite 
+run stereoscope with a different set of (single cell data)[https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8809252/?report=reader]
+
+
+
+```{r, add parasite distances to the data}
+
+
+dist_parasite <- read.table(paste0(repo, "/data/distances/Visium/distances/distances_per_spot_parasite.tsv"))
+# add metdata to the dataframe 
+
+v_se <- AddMetaData(v_se, dist_parasite)
+
+```
+
+```{r, add DEG of ST analysis to Visium analysis and visualize}
+
+#select12h-38h are from ST analysis
+
+#AddModulescore of these genes 
+v_se <- AddModuleScore(
+  object = v_se,
+  features = select_12h,
+  ctrl = 100,
+  name = 'DEG_inf_12h'
+)
+
+
+#AddModulescore of these genes 
+v_se <- AddModuleScore(
+  object = v_se,
+  features = select_24h,
+  ctrl = 100,
+  name = 'DEG_inf_24h'
+)
+
+#extract genes of interest for 12h 
+select_38h <- list(names(clusters_dend_38h_inf[clusters_dend_38h_inf %in% c(2)]))
+#AddModulescore of these genes 
+v_se <- AddModuleScore(
+  object = v_se,
+  features = select_38h,
+  ctrl = 100,
+  name = 'DEG_inf_38h'
+)
+
+##Plot scores on tissue
+ST.FeaturePlot(v_se, features = "DEG_inf_12h1", ncol = 5, cols = colorRampPalette(c("#660156","#21908C", "lightgrey", "#FFF68F", "#FFD700"))(1001) ,center.zero = T, indices = c(2), pt.size = 2)
+
+
+ST.FeaturePlot(v_se, features = "DEG_inf_12h1", ncol = 5, cols = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001), center.zero = T, indices = c(3), pt.size = 2)
+
+
+ST.FeaturePlot(v_se, features = "DEG_inf_38h1", ncol = 5, cols = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001), center.zero = T, indices = c(4), pt.size = 2)
+
+
+ST.FeaturePlot(v_se, features = "DEG_inf_38h1", ncol = 5, cols = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001), center.zero = T, indices = c(3), pt.size = 2)
+
+
+```

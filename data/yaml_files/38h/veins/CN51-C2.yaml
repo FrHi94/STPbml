@@ -1,0 +1,6 @@
+count_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-38h/tsv/norm/ctrl/CN51_38h_C2_stdata_norm.tsv.gz"
+spot_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-38h/spot_coordinates/spots_CN51_PBL_C2.tsv"
+image: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-38h/HE/210326_CN51_Pb_G.1_I.2_HE_C2_0.1.jpg"
+mask: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-38h/masks/210326_CN51_Pb_G.1_I.2_HE_C2_mask-0.1.jpg"
+rgb:
+  ambigious: [255,0,255]

@@ -1,0 +1,8 @@
+count_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-12h/tsv/norm/ctrl/CN63_D2_stdata_norm.tsv.gz"
+spot_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-12h/spots/selected_spt/ctrl/spot_selection-CN63_D2_0.1.tsv.gz"
+image: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-12h/HE/210607_ST_200302_G_RP_12h_CN63_HE_D2_0.1.jpg"
+mask: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-12h/masks/veins_only/ctrl/CN63_D2_0.1_mask.jpg"
+rgb:
+  central: [255,0,0]
+  portal: [0,0,255]
+  ambigious: [255,0,255]

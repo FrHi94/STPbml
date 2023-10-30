@@ -1,0 +1,336 @@
+---
+title: "DGEA - Visium_ST"
+author: "Franziska Hildebrandt"
+date: "2023-02-17"
+output: html_document
+---
+
+We would like to investigate DGE between clusters in ST and Visium Data. To do so we run DGE for both assays using the Wilcoxon-Rank-Sum test and highlight genes that are shared between experimental designs. 
+
+```{r, define your working directory (path to github repo), results='hide', message=FALSE}
+
+repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas"
+
+```
+
+```{r, call funtions, results='hide'}
+
+source(paste0,"scripts/FUNTIONS.R")
+
+```
+
+```{r, get differentially expressed genes from visium and ST data, message=FALSE}
+
+deg <- read.table(paste0(repo, "/res/tables_supplementary_data/deg_clusters.csv",sep = ","))
+  
+deg_v <- read.table(paste0(repo,"/res/tables_supplementary_data/deg_visium.csv",sep = ","))
+
+head(deg)
+head(deg_v)
+
+```
+
+```{r, filter unique genes based on logFC value, message=FALSE}
+
+deg <- keep_max_logFC(deg)
+deg <- deg[3:nrow(deg),]
+
+deg_v <- keep_max_logFC(deg_v)
+deg_v[5:nrow(deg_v),]
+
+```
+
+```{r, shared genes between differentially expressed genes, message=FALSE}
+
+shared_deg <- deg[deg$gene %in% intersect(deg$gene, deg_v$gene),]
+nrow(shared_deg)
+shared_deg <- shared_deg[order(-shared_deg$cluster),]
+#Add the Visium cluster to each gene in the dataframe
+
+##Some of these genes appear as markers for multiple clusters to make it easier to understand, we select it to be a marker for the cluster where it displays the higher avg_log_FC
+
+deg_v_gene_cluster <- na.omit(deg_v[deg$gene %in% shared_deg$gene, 6:7])
+colnames(deg_v_gene_cluster) <- c("visium_cluster", "gene")
+shared_deg <- right_join(shared_deg , deg_v_gene_cluster, by = "gene")
+
+shared_deg$cluster_num <- as.numeric(shared_deg$cluster)
+shared_deg <- shared_deg[order(shared_deg$cluster_num),]
+shared_deg$cluster_num <- NULL
+
+head(shared_deg)
+
+```
+
+Now that we have alll genes that are shared between Visium and ST data we can visualize them in a heatmap. 
+
+First we want to select the 20 most highly up-regulated genes in the ST data sets (as we have more data and more clusters)
+
+```{r, visualize shared DEG in a heatmap, fig.width= 50, fig.height= 20, message=FALSE}
+
+top20de <- shared_deg %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+
+top10de <- shared_deg %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+top5de <- shared_deg %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC)
+
+#For individual spots
+DoHeatmap(se.pb, features = top10de$gene, size = 4, angle = 45, group.colors = clust.cols)
+
+#Averaged across spots
+
+gene_data <- data.frame(t(se.pb@assays$SCT@counts) , cluster = se.pb$seurat_clusters,check.names = F)  
+  average_data <- aggregate(.~cluster, gene_data, mean)
+  cluster_name <- average_data[,1]
+  average_data <- apply(average_data[,2:ncol(average_data)],2,as.numeric)
+  rownames(average_data) <- cluster_name #you can also give your data individual cluster names 
+  average_data <- t(average_data)
+  phmat1 <- t(scale(t(average_data)))
+  
+# Subset phmat1 to include only the genes in top20de
+phmat2 <- phmat1[unique(top20de$gene),]
+
+# Create a data frame with the cluster annotations
+anno_df <- as.data.frame(top20de[, c("cluster", "visium_cluster")])
+rownames(anno_df) <- top20de$gene
+##Now I would like to introduce colored annotations for Visisum and ST clusters 
+annotation_colors = list(cluster = c("0" = clust.cols[1], "1" = clust.cols[2],"2" = clust.cols[3], "3" = clust.cols[4], "4" = clust.cols[5], "5" = clust.cols[6], "6" = clust.cols[7], "7" = clust.cols[8], "8" = clust.cols[9], "9" = clust.cols[10],"10" = clust.cols[11], "11" = clust.cols[12]), visium_cluster = c("0" = v.col.c[1], "1" = v.col.c[2], "2" = v.col.c[3], "3" = v.col.c[4], "4" = v.col.c[5], "5" = v.col.c[6], "6" = v.col.c[7], "7" = v.col.c[8], "8" = v.col.c[9], "9" = v.col.c[10]))
+# Add the annotations to the heatmap
+
+pdf(paste0(repo,"/res/heatmap_shared_deg.pdf", width = 50 , height = 25))
+pheatmap(phmat2, 
+         annotation_row = anno_df,
+         annotation_colors = annotation_colors,
+         fontsize_row = 8, 
+         fontsize_col = 35, 
+         cellwidth = 200, 
+         cluster_rows = F,
+         clustering_distance_rows = "correlation",
+         breaks = seq(-max(abs(phmat2)), max(abs(phmat2)), length.out = 1000), 
+         color = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001),
+         angle_col = "45", 
+         cluster_cols = F)
+dev.off()
+
+
+```
+
+
+```{r, show genes of unique clusters in ST dataset, fig.width= 50, fig.height= 20, message=FALSE}
+
+unique_deg <- deg[deg$gene %in% setdiff(deg$gene, deg_v$gene),]
+nrow(unique_deg )
+unique_deg <- na.omit(unique_deg[order(-unique_deg$avg_log2FC),])
+phmat2 <- phmat1[unique_deg$gene,]
+
+pheatmap(phmat2, 
+         fontsize_row = 8, 
+         fontsize_col = 35, 
+         cellwidth = 200, 
+         cluster_rows = T,
+         clustering_distance_rows = "correlation",
+         breaks = seq(-max(abs(phmat2)), max(abs(phmat2)), length.out = 1000), 
+         color = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001),
+         angle_col = "45", 
+         cluster_cols = F)
+
+##Most unique genes in cluster 6,8, 9, 10 + 11 so we take the top 10 of the clusters and only plot these cluster columns 
+
+
+#sort by cluster 
+unique_deg$cluster_num <- as.numeric(unique_deg$cluster)
+unique_deg <- unique_deg[order(unique_deg$cluster_num),]
+unique_deg$cluster_num <- NULL
+
+top5de <- unique_deg %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC)
+
+phmat2 <- phmat1[unique(top5de$gene),]
+
+pdf(paste0(repo,"/res/heatmap_ST_unique_deg.pdf", width = 15 , height = 20))
+pheatmap(phmat2[,c(6,9,12)], 
+         fontsize_row = 8, 
+         fontsize_col = 35, 
+         cellwidth = 200, 
+         cluster_rows = F,
+         clustering_distance_rows = "correlation",
+         breaks = seq(-max(abs(phmat2)), max(abs(phmat2)), length.out = 1000), 
+         color = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001),
+         angle_col = "45", 
+         cluster_cols = F)
+dev.off()
+
+```
+
+
+```{r, GO term analysis of genes in immune clusters, fig.width= 50, fig.height= 25, message=FALSE}
+
+##Combine genes in immune clusters from Visium and ST data 
+
+#Sort according to logFC
+#ST
+deg_2 <- deg[deg$cluster == 2,]
+deg_2 <- na.omit(deg_2[order(-deg_2$avg_log2FC),])
+
+deg_9 <- deg[deg$cluster == 9,]
+deg_9 <- na.omit(deg_9[order(-deg_9$avg_log2FC),])
+
+deg_10 <- deg[deg$cluster == 10,]
+deg_10 <- na.omit(deg_10[order(-deg_10$avg_log2FC),])
+
+#Visium 
+deg_v_2 <- deg_v[deg_v$cluster == 2,]
+deg_v_2 <- na.omit(deg_v_2[order(-deg_v_2$avg_log2FC),])
+
+deg_v_6 <- deg_v[deg_v$cluster == 6,]
+deg_v_6 <- na.omit(deg_v_6[order(-deg_v_6$avg_log2FC),])
+
+deg_v_9 <- deg_v[deg_v$cluster == 9,]
+deg_v_9 <- na.omit(deg_v_9[order(-deg_v_9$avg_log2FC),])
+
+
+deg_2_2 <- unique(c(deg_2$gene, deg_v_2$gene))
+
+write.table(deg_2_2,paste0(repo, "/res/cluster_ST3_V3_deg.tsv", sep = "\t", quote = F, row.names = F, col.names = F ))
+  
+deg_9_6 <- unique(c(na.omit(deg[deg$cluster == 9,]$gene, deg_v[deg_v$cluster == 6,]$gene)))
+
+write.table(deg_9_6, paste0(repo,"/res/cluster_ST9_V6_deg.tsv", sep = "\t", quote = F, row.names = F, col.names = F ))
+
+deg_10_9 <- unique(c(na.omit(deg[deg$cluster == 10,]$gene, deg_v[deg_v$cluster == 9,]$gene)))
+
+write.table(deg_10_9, paste0(repo, "/res/cluster_ST10_V9_deg.tsv", sep = "\t", quote = F, row.names = F, col.names = F ))
+
+
+phmat2 <- phmat1[deg_2_2,]
+
+pheatmap(phmat2, 
+         fontsize_row = 8, 
+         fontsize_col = 35, 
+         cellwidth = 200, 
+         cluster_rows = F,
+         clustering_distance_rows = "correlation",
+         breaks = seq(-max(abs(phmat2)), max(abs(phmat2)), length.out = 1000), 
+         color = colorRampPalette(c("#660156","#21908C", "white", "#FFF68F", "#FFD700"))(1001),
+         angle_col = "45", 
+         cluster_cols = F)
+
+
+```
+
+```{r, check DEGs between cluster 9 + 10, message=FALSE}
+
+
+deg_immune <- FindMarkers(se.pb, ident.1 = "10", ident.2 = "9", logfc.threshold = 0.25, min.pct = 0.25)
+
+deg_immune <- deg_immune[order(-deg_immune$avg_log2FC),]
+
+#Create a heatplot with GO terms of interest to annotate the clusters 
+
+deg_10_v_9 <- deg_immune[deg_immune$avg_log2FC > 0,]
+
+deg_9_v_10 <- deg_immune[deg_immune$avg_log2FC < 0,]
+
+
+
+##Get all genes of cluster 9 and cluster 10 in immune related pathways and only compare those. 
+
+ann_go <- read.delim(paste0(repo, "/data/annotations/20230222_annotation_Symbol_GO.txt", dec = "\t"))
+
+ann_go_10 <- ann_go[ann_go$Input %in% rownames(deg_10_v_9),] #subset annotation table
+
+ann_go_9 <- ann_go[ann_go$Input %in% rownames(deg_9_v_10),] #for both clusters
+
+immune_10_table <- unique(na.omit(ann_go_10[grepl("immun|vir|antigen|interferon|T cell|defense|bacteria|inflam", ann_go_10$Term),]))
+immune_10 <- unique(na.omit(ann_go_10[grepl("immun|vir|antigen|interferon|T cell|defense|bacteria|inflam", ann_go_10$Term),])$Symbol) #get gene list of selected genes
+
+immune_9_table <- unique(na.omit(ann_go_9[grepl("immun|vir|antigen|interferon|T cell|defense|bacteria|inflam", ann_go_9$Term),]))
+immune_9 <- unique(na.omit(ann_go_9[grepl("immun|vir|antigen|interferon|T cell|defense|bacteria|inflam", ann_go_9$Term),])$Symbol) #for both clusters
+
+```
+
+```{r, run goterm analysis with selection, message=FALSE}
+
+res9 <- na.omit(gost(query = immune_9 , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+
+res10 <- na.omit(gost(query = immune_10 , organism = "mmusculus", significant = T, sources = c("REAC", "KEGG", "GO:BP"), evcodes = T))
+
+ggplot(res9$result[res9$result$source == "KEGG",][c(1,2,4, 5, 6),], aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#F4C8BA","#E9967A"))(200)) + 
+  scale_y_continuous(expand = c(0,2.5)) +
+  coord_flip() +
+  xlab("Reactome pathway")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+ggplot(na.omit(res10$result[res10$result$source == "KEGG",][c(1:2,4,5,6),]), aes(reorder(term_name, -log10(p_value)), -log10(p_value))) + 
+  geom_segment(aes(xend = term_name, yend = 0), color = "black")+
+  geom_point(aes(color = -log10(p_value)), size = 15) +
+  scale_color_gradientn(name = "Enrichment Score",colors = colorRampPalette(c("#CEF1E5", "#76EEC6"))(200)) + 
+  scale_y_continuous(expand = c(0, 1)) +
+  coord_flip() +
+  xlab("Reactome pathway")+
+  ylab("Enrichment Score") +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 10), panel.background = element_blank(), axis.title = element_text(size = 12), legend.text = element_text(size = 8), legend.title = element_text(size = 10), legend.position = "None")
+
+
+```
+
+
+```{r, heatmap for immune genes of these two clusters, fig.width= 10, fig.height= 15, message=FALSE}
+
+#heatplot with selected GO-Terms
+
+##cluster9
+selection.9 <- subset(res9$result, res9$result$term_name %in% c("Signaling by Interleukins","Toll-like Receptor Cascades","Cytokine Signaling in Immune system","Interferon gamma signaling"))
+selection.9
+
+genes.9 <- deg_9_v_10$avg_log2FC
+names(genes.9) <- rownames(deg_9_v_10)
+##cluster10
+
+selection.10 <- subset(res10$result, res10$result$term_name %in% c("Antiviral mechanism by IFN-stimulated genes","ISG15 antiviral mechanism","Immune System", "Interferon Signaling"))
+selection.10
+
+genes.10 <- deg_10_v_9$avg_log2FC
+names(genes.10) <- rownames(deg_10_v_9)
+
+selection.all <- rbind(selection.9, selection.10)
+
+genes.all <- c(genes.9, genes.10)
+
+```
+
+```{r, make heatplots, message=FALSE}
+
+
+selection.9 <- subset(res9$result, res9$result$term_name %in% c("Leishmaniasis","TNF signaling pathway","Phagosome","IL-17 signaling pathway", "Tuberculosis"))
+selection.9
+
+genes.9 <- deg_9_v_10$avg_log2FC
+names(genes.9) <- rownames(deg_9_v_10)
+##cluster10
+
+selection.10 <- subset(res10$result, res10$result$term_name %in% c("RIG-I-like receptor signaling pathway","Hepatitis C","Coronavirus disease - COVID-19", "Complement and coagulation cascades", "NOD-like receptor signaling pathway"))
+selection.10
+
+genes.10 <- deg_10_v_9$avg_log2FC
+
+names(genes.10) <- rownames(deg_10_v_9)
+
+selection.all <- rbind(selection.9, selection.10)
+
+heatplot(selection.all, genes.all)
+
+pdf(paste0(repo, "/res/REAC_deg9_deg10_heatplot.pdf", width = 25, height = 20))
+heatplot(selection.all, genes.all)
+dev.off()
+
+```
+
+
+
+
+
+
+
+

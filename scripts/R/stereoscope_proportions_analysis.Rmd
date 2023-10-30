@@ -1,0 +1,612 @@
+---
+title: "Stereoscope analysis P. berghei infection "
+output: html_notebook
+---
+
+
+First load the data of each time point and infection state in the environment 
+
+
+```{r, load libraries}
+
+library(tidyverse)
+library(gapminder)
+library(ggplot2)
+library(ggridges)
+
+```
+
+```{r, define your working directory (path to github repo), results='hide', message=FALSE}
+
+repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas/"
+
+```
+
+```{r, call funtions, results='hide'}
+
+source(paste0(repo,"scripts/FUNTIONS.R"))
+
+```
+
+
+```{r, 12h infected prep}
+
+##12h 
+#infected
+scope_12_CN29_C1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN29_infected_12h_C1/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+
+rownames(scope_12_CN29_C1) <- paste0(rownames(scope_12_CN29_C1), "_1")
+
+scope_12_CN29_D1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN29_infected_12h_D1/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+
+rownames(scope_12_CN29_D1) <- paste0(rownames(scope_12_CN29_D1), "_2")
+
+scope_12_CN57_D1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN57_D1_stereoscope/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+
+rownames(scope_12_CN57_D1) <- paste0(rownames(scope_12_CN57_D1), "_3")
+
+scope_12_CN63_D1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN63_D1_stereoscope/W.2023-06-30144956.609391.tsv"), header = T ,row.names = 1, sep = "\t"))
+
+rownames(scope_12_CN63_D1) <- paste0(rownames(scope_12_CN63_D1), "_4")
+
+scope_12_CN63_E1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN63_E1_stereoscope/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+
+rownames(scope_12_CN63_E1) <- paste0(rownames(scope_12_CN63_E1), "_5")
+
+scope_12_CN70_C1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN70_C1_stereoscope/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+
+rownames(scope_12_CN70_C1) <- paste0(rownames(scope_12_CN70_C1), "_6")
+
+scope_12_CN70_C2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN70_C2_stereoscope/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+
+rownames(scope_12_CN70_C2)  <- paste0(rownames(scope_12_CN70_C2), "_7")
+
+scope_12_CN71_C2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN71_C2_stereoscope/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+
+rownames(scope_12_CN71_C2)  <- paste0(rownames(scope_12_CN71_C2), "_8")
+
+
+```
+
+##Add Visium data: 
+
+
+```{r, Add Visium data}
+
+Vis_12h <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/V10S29-135_C1_feature_matrix/W.2023-06-30145135.891493.tsv"), header = T,row.names = 1, sep = "\t"))
+
+Vis_12h[1:5,1:5]
+
+#split the spots into control and infected spots based on the manual annotation 
+
+#infected: 
+labels <- read.table(paste0(repo,"data/celltype_proportions/Visium_labels.tsv"), sep ="\t")
+C1.labels <- labels[labels$sample_id == "C1",]
+C1.inf.labels <- C1.labels[C1.labels$infection == "infected",]
+C1.inf.labels$spot <- gsub("_3", "", C1.inf.labels$spot)
+Vis_12h.1 <- Vis_12h[rownames(Vis_12h) %in% C1.inf.labels$spot,]
+rownames(Vis_12h.1) <- paste0(rownames(Vis_12h.1), "_3")
+Vis_12h.1[1:5,1:5]
+```
+
+format the data so you get one big dataframe with unique spotnames (rows) and proportion-values in the columns.
+Add a column/factor with time-point and one column with the infection 
+
+```{r, format}
+#rbind 
+scope_12 <- rbind(scope_12_CN29_C1, scope_12_CN29_D1, scope_12_CN57_D1, scope_12_CN63_D1, scope_12_CN63_E1, scope_12_CN70_C1, scope_12_CN70_C2, scope_12_CN71_C2,Vis_12h.1)
+                
+
+#add column to the dataframe
+
+scope_12$infection <- paste("infected")
+scope_12$timepoint <- paste(as.factor(12))
+scope_12$platform <- as.factor(paste(c(rep("2k", 5706), rep("Visium", 1686))))
+scope_12[1:5, 16:17]
+
+head(scope_12)
+
+```
+
+Do the same for the controls 
+
+```{r, 12h control prep}
+
+##12h 
+#infected
+scope_12_CN29_C2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN29_control_12h_C2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_12_CN29_C2) <- paste0(rownames(scope_12_CN29_C2), "_9")
+
+scope_12_CN29_D2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN29_control_12h_D2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_12_CN29_D2) <- paste0(rownames(scope_12_CN29_D2), "_10")
+
+scope_12_CN63_D2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN63_D2_stereoscope/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_12_CN63_D2) <- paste0(rownames(scope_12_CN63_D2), "_11")
+
+scope_12_CN63_E2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN63_E2_stereoscope/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_12_CN63_E2) <- paste0(rownames(scope_12_CN63_E2), "_12")
+
+scope_12_CN70_D2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN70_D2_stereoscope/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_12_CN70_D2) <- paste0(rownames(scope_12_CN70_D2), "_13")
+
+scope_12_CN71_D1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN71_D1_stereoscope/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_12_CN71_D1) <- paste0(rownames(scope_12_CN71_D1), "_14")
+
+```
+
+```{r, Add Visium control data 12h}
+
+#split the spots into control and infected spots based on the manual annotation 
+
+#infected: 
+C1.labels <- labels[labels$sample_id == "C1",]
+C1.c.labels <- C1.labels[C1.labels$infection == "control",]
+C1.c.labels$spot <- gsub("_3", "", C1.c.labels$spot)
+Vis_12h.2 <- Vis_12h[rownames(Vis_12h) %in% C1.c.labels$spot,]
+rownames(Vis_12h.2) <- paste0(rownames(Vis_12h.2), "_3")
+Vis_12h.2[1:5,1:5]
+
+```
+
+
+```{r, format control}
+#rbind 
+scope_12_c <- rbind(scope_12_CN29_C2, scope_12_CN29_D2, scope_12_CN63_D2, scope_12_CN63_E2, scope_12_CN70_D2, scope_12_CN71_D1, Vis_12h.2)
+#add column to the dataframe
+
+scope_12_c$infection <- paste("SGC")
+scope_12_c$timepoint <- paste(as.factor(12))
+scope_12_c$platform <- as.factor(paste(c(rep("2k", 4008), rep("Visium", 1310))))
+scope_12_c[1:5, 1:5]
+
+```
+
+Now do the same for the other timepoints starting with 24 hours post infection 
+
+```{r, 24h infected prep}
+
+##24h 
+#infected
+#CN31_D1
+scope_24_CN31_D1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN31_infected_24h_D1/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_24_CN31_D1) <- paste0(rownames(scope_24_CN31_D1), "_15")
+#CN31_E1
+scope_24_CN31_E1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN31_infected_24h_E1/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_24_CN31_E1) <- paste0(rownames(scope_24_CN31_E1), "_16")
+
+#CN54_C2
+scope_24_CN54_C2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN54_infected_24h_C2/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_24_CN54_C2) <- paste0(rownames(scope_24_CN54_C2), "_17")
+
+#CN54_E1
+scope_24_CN54_E1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN54_infected_24h_E1/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_24_CN54_E1) <- paste0(rownames(scope_24_CN54_E1), "_18")
+
+#CN55_C1
+scope_24_CN55_C1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN55_infected_24h_C1/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_24_CN55_C1) <- paste0(rownames(scope_24_CN55_C1), "_19")
+
+#CN55_D1
+scope_24_CN55_D1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN55_infected_24h_D1/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_24_CN55_D1) <- paste0(rownames(scope_24_CN55_D1), "_20")
+
+#CN55_E1
+scope_24_CN55_E1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN55_infected_24h_E1/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_24_CN55_E1) <- paste0(rownames(scope_24_CN55_E1), "_21")
+
+```
+
+```{r, add Visium data (24h), infected}
+
+Vis_24h <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/V10S29-135_B1_feature_matrix/W.2023-06-30145135.891493.tsv"), header = T,row.names = 1, sep = "\t"))
+
+Vis_24h[1:5,1:5]
+
+B1.labels <- labels[labels$sample_id == "B1",]
+B1.control.labels <- B1.labels[B1.labels$infection == "infected",]
+B1.control.labels$spot <- gsub("_2", "", B1.control.labels$spot)
+Vis_24h.1 <- Vis_24h[rownames(Vis_24h) %in% B1.control.labels$spot,]
+rownames(Vis_24h.1) <- paste0(rownames(Vis_24h.1), "_2")
+
+```
+
+format the data so you get one big dataframe with unique spotnames (rows) and proportion-values in the columns.
+Add a column/factor with time-point and one column with the infection 
+
+```{r, format 24h}
+#rbind 
+scope_24 <- rbind(scope_24_CN31_D1, scope_24_CN31_E1, scope_24_CN54_C2, scope_24_CN54_E1, scope_24_CN55_C1, scope_24_CN55_D1, scope_24_CN55_E1, Vis_24h.1
+                  )
+#add column to the dataframe
+
+scope_24$infection <- paste("infected")
+scope_24$timepoint <- paste(as.factor(24))
+scope_24$platform <- as.factor(paste(c(rep("2k", 4440), rep("Visium", 1434))))
+scope_24[1:5,13:16]
+
+```
+
+Do the same for 24 controls
+
+```{r, 24h infected prep}
+
+##24h 
+#infected
+#CN31_C2
+scope_24_CN31_C2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN31_control_24h_C2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_24_CN31_C2) <- paste0(rownames(scope_24_CN31_C2), "_22")
+#CN31_E2
+scope_24_CN31_E2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN31_control_24h_E2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_24_CN31_E2) <- paste0(rownames(scope_24_CN31_E2), "_23")
+#CN54_D2
+scope_24_CN54_D2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN54_control_24h_D2/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_24_CN54_D2) <- paste0(rownames(scope_24_CN54_D2), "_24")
+
+#CN55_C2
+scope_24_CN55_C2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN55_control_24h_C2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_24_CN55_C2) <- paste0(rownames(scope_24_CN55_C2), "_25")
+
+```
+
+```{r, add Visium data (24h), control}
+
+
+B1.labels <- labels[labels$sample_id == "B1",]
+B1.control.labels <- B1.labels[B1.labels$infection == "control",]
+B1.control.labels$spot <- gsub("_2", "", B1.control.labels$spot)
+Vis_24h.2 <- Vis_24h[rownames(Vis_24h) %in% B1.control.labels$spot,]
+rownames(Vis_24h.2) <- paste0(rownames(Vis_24h.2), "_2")
+
+```
+
+format the data so you get one big dataframe with unique spotnames (rows) and proportion-values in the columns.
+Add a column/factor with time-point and one column with the infection 
+
+```{r, format 24h}
+#rbind 
+scope_24_c <- rbind(scope_24_CN31_C2, scope_24_CN31_E2, scope_24_CN54_D2, scope_24_CN55_C2, Vis_24h.2)
+#add column to the dataframe
+
+scope_24_c$infection <- paste("SGC")
+scope_24_c$timepoint <- paste(as.factor(24))
+scope_24_c$platform <- as.factor(paste(c(rep("2k", 3241), rep("Visium", 1257)
+                               )))
+scope_24_c[1:5,1:5]
+
+```
+
+Lastly do the same thing for the 38h timepoint 
+
+```{r, 38h infected prep}
+
+##38h 
+#infected
+#CN50_C1
+scope_38_CN50_C1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN50_infected_38h_C1/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_38_CN50_C1) <- paste0(rownames(scope_38_CN50_C1), "_26")
+#CN50_C2
+scope_38_CN50_C2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN50_infected_38h_C2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_38_CN50_C2) <- paste0(rownames(scope_38_CN50_C2), "_27")
+#CN50_D2
+scope_38_CN50_D2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN50_infected_38h_D2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_38_CN50_D2) <- paste0(rownames(scope_38_CN50_D2), "_28")
+#CN51_C1
+scope_38_CN51_C1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN51_infected_38h_C1/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_38_CN51_C1) <- paste0(rownames(scope_38_CN51_C1), "_29")
+#CN51_D1
+scope_38_CN51_D1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN51_infected_38h_D1/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_38_CN51_D1) <- paste0(rownames(scope_38_CN51_D1), "_30")
+#CN53_C1
+scope_38_CN53_C1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN53_infected_38h_C1/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_38_CN53_C1) <- paste0(rownames(scope_38_CN53_C1), "_31")                               
+#CN53_D1
+scope_38_CN53_D1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN53_infected_38h_D1/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_38_CN53_D1) <- paste0(rownames(scope_38_CN53_D1), "_32")     
+#CN53_E1
+scope_38_CN53_E1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN53_infected_38h_E1/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_38_CN53_E1) <- paste0(rownames(scope_38_CN53_E1), "_33")     
+
+ncol(scope_38_CN53_E1)
+
+```
+
+```{r, add Visium data (38h), infected}
+
+Vis_38h <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/V10S29-135_A1_feature_matrix/W.2023-06-30145135.891493.tsv"), header = T,row.names = 1, sep = "\t"))
+
+##Here we have 2 different sections so we need to make sure we identify them accordingly
+
+Vis_38h[1:5,1:5]
+
+A1.labels <- labels[labels$sample_id == "A1",]
+A1.inf.labels <- A1.labels[A1.labels$infection == "infected",]
+A1.inf.labels$spot <- gsub("_1", "", A1.inf.labels$spot)
+Vis_38h.1 <- Vis_38h[rownames(Vis_38h) %in% A1.inf.labels$spot,]
+rownames(Vis_38h.1) <- paste0(rownames(Vis_38h.1), "_1")
+
+Vis_38h_1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/V10S29-135_D1_feature_matrix/W.2023-06-30145135.891493.tsv"), header = T,row.names = 1, sep = "\t"))
+
+Vis_38h_1[1:5,1:5]
+
+D1.labels <- labels[labels$sample_id == "D1",]
+D1.inf.labels <- D1.labels[D1.labels$infection == "infected",]
+D1.inf.labels$spot <- gsub("_4", "", D1.inf.labels$spot)
+Vis_38h.2 <- Vis_38h_1[rownames(Vis_38h_1) %in% D1.inf.labels$spot,]
+rownames(Vis_38h.2) <- paste0(rownames(Vis_38h.2), "_4")
+
+Vis_38h.2
+```
+
+
+format the data so you get one big dataframe with unique spotnames (rows) and proportion-values in the columns.
+Add a column/factor with time-point and one column with the infection 
+
+```{r, format 38h}
+#rbind 
+scope_38 <- rbind(scope_38_CN50_C1, scope_38_CN50_C2, scope_38_CN50_D2, scope_38_CN51_C1, scope_38_CN51_D1, scope_38_CN53_C1, scope_38_CN53_D1, scope_38_CN53_E1, Vis_38h.1, Vis_38h.2)
+#add column to the dataframe
+
+scope_38$infection <- paste("infected")
+scope_38$timepoint <- paste(as.factor(38))
+scope_38$platform <- as.factor(paste(c(rep("2k", 4836), rep("Visium", 2932)
+                                      )))
+
+scope_38[1:5,13:15]
+
+```
+
+Do the same for 38 controls
+
+```{r, 38h control prep}
+
+##38h 
+#controls
+#CN50_E1
+scope_38_CN50_E1 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN50_control_38h_E1/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_38_CN50_E1) <- paste0(rownames(scope_38_CN50_E1), "_34")     
+
+#CN50_E2
+scope_38_CN50_E2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN50_control_38h_E2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_38_CN50_E2) <- paste0(rownames(scope_38_CN50_E2), "_35")     
+
+#CN51_C2
+scope_38_CN51_C2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN51_control_38h_C2/W.2023-06-30144956.609391.tsv"), header = T,row.names = 1, sep = "\t"))
+rownames(scope_38_CN51_C2) <- paste0(rownames(scope_38_CN51_C2), "_36")    
+#CN51_D2
+scope_38_CN51_D2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN51_control_38h_D2/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_38_CN51_D2) <- paste0(rownames(scope_38_CN51_D2), "_37")
+#CN53_D2
+scope_38_CN53_D2 <- as.data.frame(read.table(paste0(repo,"data/celltype_proportions/CN53_control_38h_D2/W.2023-06-30144956.609391.tsv"), header = T, row.names = 1, sep = "\t"))
+rownames(scope_38_CN53_D2) <- paste0(rownames(scope_38_CN53_D2), "_38")
+
+```
+
+
+```{r, add Visium data (38h), control}
+
+Vis_38h[1:5,1:5]
+
+A1.labels <- labels[labels$sample_id == "A1",]
+A1.control.labels <- A1.labels[A1.labels$infection == "control",]
+A1.control.labels$spot <- gsub("_1", "", A1.control.labels$spot)
+Vis_38h.3 <- Vis_38h[rownames(Vis_38h) %in% A1.control.labels$spot,]
+rownames(Vis_38h.3) <- paste0(rownames(Vis_38h.3), "_1")
+tail(Vis_38h.3)
+
+D1.labels <- labels[labels$sample_id == "D1",]
+D1.control.labels <- D1.labels[D1.labels$infection == "control",]
+D1.control.labels$spot <- gsub("_4", "", D1.control.labels$spot)
+Vis_38h.4 <- Vis_38h_1[rownames(Vis_38h_1) %in% D1.control.labels$spot,]
+rownames(Vis_38h.4) <- paste0(rownames(Vis_38h.4), "_4")
+tail(Vis_38h.4)
+
+```
+
+
+format the data so you get one big dataframe with unique spotnames (rows) and proportion-values in the columns.
+Add a column/factor with time-point and one column with the infection 
+
+```{r, format 38h}
+
+#rbind 
+scope_38_c <- rbind(scope_38_CN50_E1, scope_38_CN50_E2, scope_38_CN51_C2, scope_38_CN51_D2, scope_38_CN53_D2, Vis_38h.3, Vis_38h.4)
+#add column to the dataframe
+
+scope_38_c$infection <- paste("SGC")
+scope_38_c$timepoint <- paste(as.factor(38))
+scope_38_c$platform <- as.factor(paste(c(rep("2k", 3118), rep("Visium", 2644))))
+
+scope_38_c[1:5,13:17]
+
+```
+
+
+```{r, make one dataframe with infected samples}
+
+infected <- rbind(scope_12, scope_24, scope_38)
+
+controls <- rbind(scope_12_c, scope_24_c, scope_38_c)
+all <- rbind(infected, controls
+             #controls_0
+             )
+
+tail(all)
+
+#pdf("/home/st-analysis_home/franziska.hildebra/analysis/stereoscope/res/boxplot_Kupffercells.pdf")
+ggplot(data = all, aes(x = timepoint, y = Kupffer.cells , fill = infection)) + 
+  geom_boxplot() + 
+  scale_fill_manual(values = rev(c("#bc4749", "#6a994e")))+ 
+  ylab("KC proportions") + 
+  theme_classic()
+#dev.off()
+
+
+ggplot(data = all, aes(x = timepoint, y = Kupffer.cells, fill = platform)) + 
+  geom_boxplot() + 
+  theme_classic() + 
+  ylab("KC proportion")
+
+ggplot(data = all, aes(x = timepoint, y = T...NK.cells, fill = platform)) + 
+  geom_boxplot()
+
+```
+
+change format so that celltypes are one column and values another 
+
+```{r, reformat}
+
+#gather all celltypes into one column and set a new column "value"
+
+all_new <- tidyr::gather(all, key = "celltype", value = "value", 1:14)
+
+infected <- subset(all_new, all_new$infection == "infected")
+control <- subset(all_new, all_new$infection == "SGC")
+#plot again 
+
+ggplot(data = infected, aes(x = celltype , y = value, fill = timepoint)) + 
+  geom_boxplot() + 
+  coord_flip()
+
+ggplot(data = control, aes(x = celltype , y = value, fill = timepoint)) + 
+  geom_boxplot() + 
+  coord_flip()
+
+ggplot(data = all_new, aes(x = celltype , y = value, fill = infection)) + 
+  geom_boxplot() + 
+  coord_flip()
+
+```
+
+
+Now we would like to investigate distances of celltype proportions in areas of interest. We will do that for a) vein neighbourhoods b) parasite neighbourhoods and c) IHS neighbourhoods 
+
+
+```{r, read in seurat data and concatenate the single cell data}
+
+##LOAD your seurat object (called se.pb)
+
+#bind the data
+pb_sc_proportions <- rbind(scope_12, scope_12_c, scope_24, scope_24_c, scope_38, scope_38_c)
+pb_sc_proportions <- pb_sc_proportions[,1:14]
+#Give the proper rownames 
+colnames(pb_sc_proportions) <- c("Activated_periportal_hepatocytes", "B_cells", "Cholangiocytes", "Endothelial_cells", 
+                                 "Fibroblasts", "Inflammatory_hepatocytes", "Kupffer_cells","Mesothelial_cells",
+                                 "Midlobular_hepatocytes", "Monocytes_DCs","Pericentral_hepatocytes", "Vascular_endothelial_cells", "Periportal_hepatocytes", "T_NK_cells")
+
+#Add as metadata to seurat object
+
+se.pb <- AddMetaData(se.pb, pb_sc_proportions)
+
+se.pb[[]]
+
+```
+
+```{r, load distances data}
+
+dist_parasite <- read.table(paste0(repo,"data/distances/distances_per_spot_parasite.tsv"))
+dist_roi <- read.table(paste0(repo,"data/distances/distances_per_spot_ROI.tsv"))
+dist_vis_vein <- read.table(paste0(repo,"data/distances/distances_per_spot_veins.tsv"))
+dist_comp_vein <- read.table(paste0(repo,"data/distances/distances_per_spot_comp_veins.tsv"))
+
+##Make a dataframe of the distances and the celltype proportions 
+
+```
+
+We can first run all celltypes for all regions of interest. We can then have a look if we find any cell type that shows correlation to the regions of interest 
+
+```{r, run proportions by distance, fig.width= 15, fig.height=2.5}
+
+#Run the function 
+
+type <- colnames(pb_sc_proportions)
+
+#distance to parasite
+prop_by_dist(se.pb, type = type[1:10], roi_dist = "dist_parasite_um", center = "parasite", ncol = 4, nrow = 4, delta = T, thrs = 400)
+
+prop_by_dist(se.pb, type = type[c(2,5,13,14)], roi_dist = "dist_parasite_um", center = "parasite", ncol = 4, nrow = 1, delta = T, thrs = 400)
+
+prop_by_dist(se.pb, type = type[c(10,6,7,11)], roi_dist = "dist_parasite_um", center = "parasite", ncol = 4, nrow = 1, delta = T, thrs = 400)
+
+#distance to veintype (central)
+prop_by_dist(se.pb, type = c("Periportal_hepatocytes","Pericentral_hepatocytes", "Midlobular_hepatocytes"), roi_dist = "dist_comp_ann_central_um", center = "central vein", ncol = 3, nrow = 1, delta = F, thrs = 400, show.condition = F) 
+
+#distance to veintype (portal)
+prop_by_dist(se.pb, type = c("Periportal_hepatocytes","Pericentral_hepatocytes", "Midlobular_hepatocytes"), roi_dist = "dist_comp_ann_portal_um", center = "portal vein", ncol = 3, nrow = 1, delta = F, thrs = 400, show.condition = F)
+
+#distance to IHS
+prop_by_dist(se.pb, type[type %in%rownames(cor_dist_IHS)], roi_dist = "dist_roi_um", center = "IHS", ncol = 5, nrow = 1, delta = T, thrs = 800, show.condition = T) 
+
+
+```
+
+We can already tell that some of the annotations might be a little bit off judging from their proportions along the defined axes above. Periportal endothelial cells and pericentral inflammatory hepatocytes do not seem to be what we annotated them as - we will most likely have to go back and correct for that. One thing I would like to try is to change the 
+
+Maybe now we would like to see whether we have a correlation between cell type proportions of some cell types with the distance to the region of interest 
+```{r, correlation between distance and celltype proportions}
+
+cor_dist_parsites <- cor_dist_prop(object = se.pb, types = type , thrs = 400, dist = "dist_parasite_um")
+cor_dist_parsites <- subset(cor_dist_parsites, cor_dist_parsites$p.adj < 0.05)
+cor_dist_IHS <- cor_dist_prop(object = se.pb, types = type , thrs = 800, dist = "dist_roi_um")
+cor_dist_IHS <- subset(cor_dist_IHS, cor_dist_IHS$p.adj < 0.05)
+cor_dist_portal <- cor_dist_prop(object = se.pb, types = type , thrs = 400, dist = "dist_comp_ann_portal_um")
+cor_dist_portal <- subset(cor_dist_portal, cor_dist_portal$p.adj < 0.05)
+cor_dist_central <- cor_dist_prop(object = se.pb, types = type , thrs = 400, dist = "dist_comp_ann_central_um")
+cor_dist_central <- subset(cor_dist_central, cor_dist_central$p.adj < 0.05)
+
+```
+
+Run proportion by distance correlation timepoint-wise for infected conditions
+
+```{r, timepoint-wise proportion by distance analysis for parasite infected tissues}
+
+#subset pb.data
+
+se.12h <- SubsetSTData(se.pb, expression = timepoint %in% "12h")
+se.24h <- SubsetSTData(se.pb, expression = timepoint %in% "24h")
+se.38h <- SubsetSTData(se.pb, expression = timepoint %in% "38h")
+
+#12h
+cor_dist_12hpi <- cor_dist_prop(object = se.12h, types = type , thrs = 400, dist = "dist_parasite_um")
+cor_dist_12hpi <- subset(cor_dist_12hpi, cor_dist_12hpi$p.adj < 0.05)
+cor_dist_12hpi
+
+#24h
+
+cor_dist_24hpi <- cor_dist_prop(object = se.24h, types = type , thrs = 400, dist = "dist_parasite_um")
+cor_dist_24hpi <- subset(cor_dist_24hpi, cor_dist_24hpi$p.adj < 0.05)
+cor_dist_24hpi
+
+#38h
+
+cor_dist_38hpi <- cor_dist_prop(object = se.38h, types = type , thrs = 400, dist = "dist_parasite_um")
+cor_dist_38hpi <- subset(cor_dist_38hpi, cor_dist_38hpi$p.adj < 0.05)
+cor_dist_38hpi
+
+
+```
+
+
+Visualize pericentral, midlobular and periportal scores on tissue coordinates
+
+```{r, visualise zonated hepatocyte proportions on tissue do on Visium samples, fig.width = 10, fig.height = 20}
+
+#LOAD VISIUM DATA (v_se)
+
+##add the celltype proportions to the data 
+v_se <- AddMetaData(v_se, pb_sc_proportions)
+
+ST.FeaturePlot(v_se, features = c("Pericentral_hepatocytes"), pt.size = 0.75, blend = F, indices = 1:3, pt.border = F, ncol = 3, cols = colorRampPalette(c("white", "#d62828"))(1001))
+
+ST.FeaturePlot(v_se, features = c("Periportal_hepatocytes"), pt.size = 0.75,blend = F, pt.border = F, indices = 1:3, ncol = 3, cols = colorRampPalette(c("white","#072ac8"))(1001))
+ST.FeaturePlot(v_se, features = c("Inflammatory_hepatocytes"),  blend = F, pt.border = F)
+ST.FeaturePlot(v_se, features = c("Pericentral_hepatocytes", "Periportal_hepatocytes"), blend = T, pt.border = F)
+
+
+#Show in ST data 
+ST.FeaturePlot(se.pb, features = c("Pericentral_hepatocytes"), pt.size = 0.75, blend = F,  pt.border = F, ncol = 10, cols = colorRampPalette(c("white", "#d62828"))(1001))
+
+ST.FeaturePlot(se.pb, features = c("Periportal_hepatocytes"), pt.size = 0.75,blend = F, pt.border = F,  ncol = 10, cols = colorRampPalette(c("white","#072ac8"))(1001))
+
+```
+
+

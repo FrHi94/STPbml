@@ -1,0 +1,878 @@
+---
+title: "Doublets removal from all sn-seq samples"
+author: "Miren Urrutia Iturritza"
+date: "`r Sys.Date()`"
+output: html_document
+---
+I have created the 'Doublet_removal' folder, which contains all necessary files 
+for running this code. 
+We can also store the outputs here. 
+
+```{r, define your working directory (path to github repo), results='hide', message=FALSE}
+
+repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas/"
+
+```
+
+You might need to install this package. 
+```{r installing packages for DoubletFinder, include=FALSE}
+install.packages("remotes")
+remotes::install_github("chris-mcginnis-ucsf/DoubletFinder")
+```
+
+```{r, Load packages}
+library(Seurat)
+library(DoubletFinder)
+```
+
+You can find below all the steps I took to load the data obtained from 
+cellranger and processed until the seurat objects are created. 
+You can also find the seurat objects saved in the 'Doublet removal' folder, if
+you would prefer to skip to that step directly. 
+
+```{r, load data with Read10x}
+#Load Sample 12 data 
+Sample12.data <- Read10X(data.dir = paste0(repo,"data/snseq_original_files/Sample1_12/sample1_filtered_feature_bc_matrix/"))
+#Load Sample 24 data  
+Sample24.data <- Read10X(data.dir = paste0(repo,"data/snseq_original_files/Sample2_24/sample2_filtered_feature_bc_matrix/"))
+#Load Sample 38 data 
+Sample38.data <- Read10X(data.dir =paste0(repo,"data/snseq_original_files/Sample3_38/sample3_filtered_feature_bc_matrix/"))
+#Load Sample 12C data 
+Sample12C.data <- Read10X(data.dir =paste0(repo,"data/snseq_original_files/Sample4_12C/sample4_raw_feature_bc_matrix/"))
+#Load Sample NC2 data
+SampleNC2.data <- Read10X(data.dir =paste0(repo,"data/snseq_original_files/Sample5_NC2/sample5_filtered_feature_bc_matrix/"))
+#Load Sample 24C data 
+Sample24C.data <- Read10X(data.dir =paste0(repo,"data/snseq_original_files/Sample6_24C/sample6_filtered_feature_bc_matrix/"))
+#Load Sample 38C data 
+Sample38C.data <- Read10X(data.dir =paste0(repo,"data/snseq_original_files/Sample7_38C/sample7_raw_feature_bc_matrix/"))
+
+```
+
+
+Putting the rownames of the dgCMatrix in the correct format.
+(I am not sure this is necessary? I don't see much differences) 
+
+```{r, rownames}
+#Sample 12
+ensemble_id_names12 <- rownames(Sample12.data)
+ensemble_id_names12 <- sapply(ensemble_id_names12,
+                              function(x) {strsplit(x,'\\.')[[1]][1]} )
+ensemble_id_names12 <- as.vector(unlist(ensemble_id_names12))
+rownames(Sample12.data) <- ensemble_id_names12
+
+#Sample 24
+ensemble_id_names24 <- rownames(Sample24.data)
+ensemble_id_names24 <- sapply(ensemble_id_names24,
+                              function(x) {strsplit(x,'\\.')[[1]][1]} )
+ensemble_id_names24 <- as.vector(unlist(ensemble_id_names24))
+rownames(Sample24.data) <- ensemble_id_names24
+
+#Sample 38
+ensemble_id_names38 <- rownames(Sample38.data)
+ensemble_id_names38 <- sapply(ensemble_id_names38,
+                              function(x) {strsplit(x,'\\.')[[1]][1]} )
+ensemble_id_names38 <- as.vector(unlist(ensemble_id_names38))
+rownames(Sample38.data) <- ensemble_id_names38
+
+#Sample 12C
+ensemble_id_names12C <- rownames(Sample12C.data)
+ensemble_id_names12C <- sapply(ensemble_id_names12C,
+                              function(x) {strsplit(x,'\\.')[[1]][1]} )
+ensemble_id_names12C <- as.vector(unlist(ensemble_id_names12C))
+rownames(Sample12C.data) <- ensemble_id_names12C
+
+#Sample NC2
+ensemble_id_namesNC2 <- rownames(SampleNC2.data)
+ensemble_id_namesNC2 <- sapply(ensemble_id_namesNC2,
+                              function(x) {strsplit(x,'\\.')[[1]][1]} )
+ensemble_id_namesNC2 <- as.vector(unlist(ensemble_id_namesNC2))
+rownames(SampleNC2.data) <- ensemble_id_namesNC2
+
+#Sample 24C
+ensemble_id_names24C <- rownames(Sample24C.data)
+ensemble_id_names24C <- sapply(ensemble_id_names24C,
+                              function(x) {strsplit(x,'\\.')[[1]][1]} )
+ensemble_id_names24C <- as.vector(unlist(ensemble_id_names24C))
+rownames(Sample24C.data) <- ensemble_id_names24C
+
+#Sample 38C
+ensemble_id_names38 <- rownames(Sample38.data)
+ensemble_id_names38 <- sapply(ensemble_id_names38,
+                              function(x) {strsplit(x,'\\.')[[1]][1]} )
+ensemble_id_names38 <- as.vector(unlist(ensemble_id_names38))
+rownames(Sample38.data) <- ensemble_id_names38
+```
+
+We already have the annotation file ("mus_pb_annotation_seurat.tsv").
+Here, we select only the annotations from the file that are not filled with NA.
+```{r, Prepare annotation files}
+# Select only the annotations that are not NA
+mus_pb_annotation <- read.table(paste0(repo,"annotation/mus_pb_annotation_seurat.tsv", 
+  header = T))
+mus_pb_annotation1 <- as.vector(mus_pb_annotation$gene_name)
+names(mus_pb_annotation1) <- mus_pb_annotation$gene_id
+keep <- (!(is.na(mus_pb_annotation1)))
+genes <- mus_pb_annotation1[keep]
+
+# Get the names of the genes only
+extract <- names(mus_pb_annotation1[keep])
+
+#Get rid of duplicates:
+# A) For Emsembl IDs
+extract <- as.vector(extract[!(duplicated(extract))])
+
+# B) For Gene names
+genes <- as.vector(genes[!(duplicated(extract))])
+```
+
+```{r, Keep only the Ensembl IDs that are present in both matrices}
+
+# Keep only the rows that have an Ensembl ID in the "extract" vector 
+# and which are present in the count matrix. 
+
+# Sample 12
+# Find indices of elements in the vector that match the first column of the 
+# dgCMatrix
+indices12 <- match(extract, rownames(Sample12.data))
+indices12 <- indices12[complete.cases(indices12)]
+nmat12 <- Sample12.data[indices12,]
+# Change the names of the rows (Ensembl IDs) by the names of the elements in 
+# the stores vector 'genes'
+mus_pb_annotation12 <- subset(mus_pb_annotation1, 
+                              names(mus_pb_annotation1) %in% rownames(nmat12))
+# Find indices of Ensembl IDs that are in both nmat and ensembl_ids
+rownames(nmat12) <- mus_pb_annotation12
+
+
+# Sample 24
+indices24 <- match(extract, rownames(Sample24.data))
+indices24 <- indices24[complete.cases(indices24)]
+nmat24 <- Sample24.data[indices24,]
+mus_pb_annotation24 <- subset(mus_pb_annotation1, 
+                              names(mus_pb_annotation1) %in% rownames(nmat24))
+rownames(nmat24) <- mus_pb_annotation24
+
+
+# Sample 38
+indices38 <- match(extract, rownames(Sample38.data))
+indices38 <- indices38[complete.cases(indices38)]
+nmat38 <- Sample38.data[indices38,]
+mus_pb_annotation38 <- subset(mus_pb_annotation1, 
+                              names(mus_pb_annotation1) %in% rownames(nmat38))
+rownames(nmat38) <- mus_pb_annotation38
+
+
+# Sample 12C
+indices12C <- match(extract, rownames(Sample12C.data))
+indices12C <- indices12C[complete.cases(indices12C)]
+nmat12C <- Sample12C.data[indices12C,]
+mus_pb_annotation12C <- subset(mus_pb_annotation1, 
+                               names(mus_pb_annotation1) %in% rownames(nmat12C))
+rownames(nmat12C) <- mus_pb_annotation12C
+
+
+# Sample NC2
+indicesNC2 <- match(extract, rownames(SampleNC2.data))
+indicesNC2 <- indicesNC2[complete.cases(indicesNC2)]
+nmatNC2 <- SampleNC2.data[indicesNC2,]
+mus_pb_annotationNC2 <- subset(mus_pb_annotation1, 
+                               names(mus_pb_annotation1) %in% rownames(nmatNC2))
+rownames(nmatNC2) <- mus_pb_annotationNC2
+
+
+# Sample 24C
+indices24C <- match(extract, rownames(Sample24C.data))
+indices24C <- indices24C[complete.cases(indices24C)]
+nmat24C <- Sample24C.data[indices24C,]
+mus_pb_annotation24C <- subset(mus_pb_annotation1, 
+                               names(mus_pb_annotation1) %in% rownames(nmat24C))
+rownames(nmat24C) <- mus_pb_annotation24C
+
+
+# Sample 38C
+indices38C <- match(extract, rownames(Sample38C.data))
+indices38C <- indices38C[complete.cases(indices38C)]
+nmat38C <- Sample38C.data[indices38C,]
+mus_pb_annotation38C <- subset(mus_pb_annotation1, 
+                               names(mus_pb_annotation1) %in% rownames(nmat38C))
+rownames(nmat38C) <- mus_pb_annotation38C
+```
+
+Create the Seurat objects for all the samples 
+```{r, initialise seurat object}
+
+Sample12.seurat <- CreateSeuratObject(counts = nmat12, 
+                                      min.cells = 10, min.features = 200, 
+                                      project = 'sample12')
+Sample24.seurat <- CreateSeuratObject(counts = nmat24,
+                                      min.cells = 10, min.features = 200, 
+                                      project = 'sample24')
+Sample38.seurat <- CreateSeuratObject(counts = nmat38, 
+                                      min.cells = 10, min.features = 200, 
+                                      project = 'sample38')
+Sample12C.seurat <- CreateSeuratObject(counts = nmat12C, 
+                                       min.cells = 10, min.features = 200, 
+                                       project = 'sample12C')
+SampleNC2.seurat <- CreateSeuratObject(counts = nmatNC2, 
+                                       min.cells = 10, min.features = 200, 
+                                       project = 'sampleNC2')
+Sample24C.seurat <- CreateSeuratObject(counts = nmat24C, 
+                                       min.cells = 10, min.features = 200, 
+                                       project = 'sample24C')
+Sample38C.seurat <- CreateSeuratObject(counts = nmat38C, 
+                                       min.cells = 10, min.features = 200, 
+                                       project = 'sample38C')
+```
+
+
+Next, calculate the number of mitrochondrial, ribosomal and Plasmodium genes
+```{r, Check number of cells}
+# Check numbers of cells for all samples
+cellnumberS12 <- table(Idents(Sample12.seurat))
+cellnumberS24 <- table(Idents(Sample24.seurat))
+cellnumberS38 <- table(Idents(Sample38.seurat))
+cellnumberS12C <- table(Idents(Sample12C.seurat))
+cellnumberSNC2 <- table(Idents(SampleNC2.seurat))
+cellnumberS24C <- table(Idents(Sample24C.seurat))
+cellnumberS38C <- table(Idents(Sample38C.seurat))
+
+cellnumberS12
+cellnumberS24
+cellnumberS38
+cellnumberS12C 
+cellnumberSNC2
+cellnumberS24C
+cellnumberS38C
+
+```
+
+```{r, Calculate number of mitochondrial, ribosomal, and Plasmodium genes}
+#Calculate number of mitochondrial, ribosomal, and Plasmodium genes
+
+# Sample 12
+Sample12.seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample12.seurat, pattern = 'mt-')
+Sample12.seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample12.seurat, pattern = '^Rp[sl]')
+Sample12.seurat[["Percent.pb"]] <- 
+  PercentageFeatureSet(Sample12.seurat, pattern = "-pb")
+
+#Sample 24
+Sample24.seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample24.seurat, pattern = 'mt-')
+Sample24.seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample24.seurat, pattern = '^Rp[sl]')
+Sample24.seurat[["Percent.pb"]] <- 
+  PercentageFeatureSet(Sample24.seurat, pattern = "-pb")
+
+#Sample 38
+Sample38.seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample38.seurat, pattern = 'mt-')
+Sample38.seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample38.seurat, pattern = '^Rp[sl]')
+Sample38.seurat[["Percent.pb"]] <- 
+  PercentageFeatureSet(Sample38.seurat, pattern = "-pb")
+
+#Sample 12C
+Sample12C.seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample12C.seurat, pattern = 'mt-')
+Sample12C.seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample12C.seurat, pattern = '^Rp[sl]')
+Sample12C.seurat[["Percent.pb"]] <- 
+  PercentageFeatureSet(Sample12C.seurat, pattern = "-pb")
+
+#Sample NC2
+SampleNC2.seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(SampleNC2.seurat, pattern = 'mt-')
+SampleNC2.seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(SampleNC2.seurat, pattern = '^Rp[sl]')
+SampleNC2.seurat[["Percent.pb"]] <- 
+  PercentageFeatureSet(SampleNC2.seurat, pattern = "-pb")
+
+#Sample 24C
+Sample24C.seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample24C.seurat, pattern = 'mt-')
+Sample24C.seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample24C.seurat, pattern = '^Rp[sl]')
+Sample24C.seurat[["Percent.pb"]] <- 
+  PercentageFeatureSet(Sample24C.seurat, pattern = "-pb")
+
+#Sample 38C
+Sample38C.seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample38C.seurat, pattern = 'mt-')
+Sample38C.seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample38C.seurat, pattern = '^Rp[sl]')
+Sample38C.seurat[["Percent.pb"]] <- 
+  PercentageFeatureSet(Sample38C.seurat, pattern = "-pb")
+
+
+```
+
+Visualise the calculated number of genes, prior to trimming 
+```{r, plot pre-filtered samples}
+# Change 'Sample12.seurat' with the name of any of the other samples. 
+VlnPlot(Sample12.seurat, group.by = "orig.ident", raster = FALSE, 
+        features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", 
+                     "Percent.ribosomal", "Percent.pb"), ncol = 5)
+
+VlnPlot(Sample12C.seurat, group.by = "orig.ident", raster = FALSE, 
+        features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", 
+                     "Percent.ribosomal", "Percent.pb"), ncol = 5)
+```
+
+Filtering cells with low number of counts
+```{r, filtering cells}
+#Sample 12 
+Sample12_seurat <- subset(Sample12.seurat, 
+                                   subset = nFeature_RNA > 500 & 
+                                     nFeature_RNA < 5000 & 
+                                     Percent.mito < 10)
+#Sample 24
+Sample24_seurat <- subset(Sample24.seurat, 
+                                   subset = nFeature_RNA > 500 & 
+                                     nFeature_RNA < 5000 & 
+                                     Percent.mito < 10)
+#Sample 38
+Sample38_seurat <- subset(Sample38.seurat, 
+                                   subset = nFeature_RNA > 500 & 
+                                     nFeature_RNA < 5000 & 
+                                     Percent.mito < 10)
+#Sample 12C
+Sample12C_seurat <- subset(Sample12C.seurat, 
+                                   subset = nFeature_RNA >500 & 
+                                     nFeature_RNA < 5000 & 
+                                     Percent.mito < 5)
+#Sample NC2
+SampleNC2_seurat <- subset(SampleNC2.seurat, 
+                                   subset = nFeature_RNA > 500 & 
+                                     nFeature_RNA < 5000 & 
+                                     Percent.mito < 10)
+#Sample 24C
+Sample24C_seurat <- subset(Sample24C.seurat, 
+                                   subset = nFeature_RNA > 500 & 
+                                     nFeature_RNA < 5000 & 
+                                     Percent.mito < 10)
+#Sample 38C
+Sample38C_seurat <- subset(Sample38C.seurat, 
+                                   subset = nFeature_RNA > 500 & 
+                                     nFeature_RNA < 5000 & 
+                                     Percent.mito < 10)
+
+```
+
+```{r, Calculate new number of cells per sample}
+
+cells_Sample12_after_filtering <- table(Idents(Sample12_seurat))
+cells_Sample24_after_filtering <- table(Idents(Sample24_seurat))
+cells_Sample38_after_filtering <- table(Idents(Sample38_seurat))
+cells_Sample12C_after_filtering <- table(Idents(Sample12C_seurat))
+cells_SampleNC2_after_filtering <- table(Idents(SampleNC2_seurat))
+cells_Sample24C_after_filtering <- table(Idents(Sample24C_seurat))
+cells_Sample38C_after_filtering <- table(Idents(Sample38C_seurat))
+
+cells_Sample12_after_filtering
+cells_Sample24_after_filtering
+cells_Sample38_after_filtering
+cells_Sample12C_after_filtering
+cells_SampleNC2_after_filtering
+cells_SampleNC2_after_filtering
+cells_Sample24C_after_filtering
+cells_Sample38C_after_filtering
+
+```
+
+
+```{r,Plot post-filtering samples}
+# Change 'Sample12.seurat' with the name of any of the other samples. 
+VlnPlot(Sample12_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(Sample24_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(Sample38_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+
+VlnPlot(Sample12C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(Sample24C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(Sample38C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(SampleNC2_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+
+```
+Remove the mitochondrial genes
+```{r, removal of mitochondrial genes}
+#grep("mt-", rownames(Sample12_seurat), value = TRUE)
+
+#Sample 12
+Sample12_seurat <- 
+  Sample12_seurat[!grepl("mt-", 
+                                  rownames(Sample12_seurat)),]
+Sample12_seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample12_seurat, pattern = "mt-")
+
+#Sample 24
+Sample24_seurat <- 
+  Sample24_seurat[!grepl("mt-", 
+                                  rownames(Sample24_seurat)),]
+Sample24_seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample24_seurat, pattern = "mt-")
+
+#Sample 38
+Sample38_seurat <- 
+  Sample38_seurat[!grepl("mt-", 
+                                  rownames(Sample38_seurat)),]
+Sample38_seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample38_seurat, pattern = "mt-")
+
+#Sample 12C
+Sample12C_seurat <- 
+  Sample12C_seurat[!grepl("mt-", 
+                                  rownames(Sample12C_seurat)),]
+
+Sample12C_seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample12C_seurat, pattern = "mt-")
+
+#Sample NC2
+SampleNC2_seurat <- 
+  SampleNC2_seurat[!grepl("mt-", 
+                                  rownames(SampleNC2_seurat)),]
+SampleNC2_seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(SampleNC2_seurat, pattern = "mt-")
+
+#Sample 24C
+Sample24C_seurat <- 
+  Sample24C_seurat[!grepl("mt-", 
+                                  rownames(Sample24C_seurat)),]
+
+Sample24C_seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample24C_seurat, pattern = "mt-")
+
+#Sample 38C
+Sample38C_seurat <- 
+  Sample38C_seurat[!grepl("mt-", 
+                                  rownames(Sample38C_seurat)),]
+Sample38C_seurat[["Percent.mito"]] <- 
+  PercentageFeatureSet(Sample38C_seurat, pattern = "mt-")
+
+```
+
+Remove the ribosomal genes
+```{r, removal of ribosomal genes}
+#grep("^Rp[sl]", rownames(Sample12_seurat), value = TRUE)
+
+#Sample 12
+Sample12_seurat <- 
+  Sample12_seurat[!grepl("^Rp[sl]", 
+                                  rownames(Sample12_seurat)),]
+
+Sample12_seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample12_seurat, pattern = "^Rp[sl]")
+
+#Sample 24
+Sample24_seurat <- 
+  Sample24_seurat[!grepl("^Rp[sl]", 
+                                  rownames(Sample24_seurat)),]
+
+Sample24_seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample24_seurat, pattern = "^Rp[sl]")
+
+#Sample 38
+Sample38_seurat <- 
+  Sample38_seurat[!grepl("^Rp[sl]", 
+                                  rownames(Sample38_seurat)),]
+
+Sample38_seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample38_seurat, pattern = "^Rp[sl]")
+
+#Sample 12C
+Sample12C_seurat <- 
+  Sample12C_seurat[!grepl("^Rp[sl]", 
+                                  rownames(Sample12C_seurat)),]
+
+Sample12C_seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample12C_seurat, pattern = "^Rp[sl]")
+
+#Sample NC2
+SampleNC2_seurat <- 
+  SampleNC2_seurat[!grepl("^Rp[sl]", 
+                                  rownames(SampleNC2_seurat)),]
+
+SampleNC2_seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(SampleNC2_seurat, pattern = "^Rp[sl]")
+
+#Sample 24C
+Sample24C_seurat <- 
+  Sample24C_seurat[!grepl("^Rp[sl]", 
+                                  rownames(Sample24C_seurat)),]
+
+Sample24C_seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample24C_seurat, pattern = "^Rp[sl]")
+
+#Sample 38C
+Sample38C_seurat <- 
+  Sample38C_seurat[!grepl("^Rp[sl]", 
+                                  rownames(Sample38C_seurat)),]
+
+Sample38C_seurat[["Percent.ribosomal"]] <- 
+  PercentageFeatureSet(Sample38C_seurat, pattern = "^Rp[sl]")
+```
+
+Plot to see that the removal of genes has gone well
+```{r, plot removal of genes}
+# Change 'Sample12_seurat' with the name of any of the other samples.
+VlnPlot(Sample12_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(Sample24_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(Sample38_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+
+VlnPlot(Sample12C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+
+VlnPlot(Sample24C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(Sample38C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+VlnPlot(SampleNC2_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
+
+```
+
+Here, we start with the process of removing the Doublets.
+You will find two possible ways of doing this below:
+
+A) Follow example from paper Gartner et al 2019
+(https://github.com/chris-mcginnis-ucsf/DoubletFinder)
+
+```{r, normalise and transform data}
+#Sample 12
+Sample12_seurat <- NormalizeData(Sample12_seurat)
+Sample12_seurat <- FindVariableFeatures(Sample12_seurat,
+                                                 selection.method = 'vst', 
+                                                 nfeatures = 500)
+Sample12_seurat <- ScaleData(Sample12_seurat)
+Sample12_seurat <- RunPCA(Sample12_seurat)
+Sample12_seurat <- RunUMAP(Sample12_seurat, dims = 1:10)
+
+DimPlot(Sample12_seurat)
+FeaturePlot(Sample12_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+#Sample 24
+Sample24_seurat <- NormalizeData(Sample24_seurat)
+Sample24_seurat <- FindVariableFeatures(Sample24_seurat,
+                                                 selection.method = 'vst', 
+                                                 nfeatures = 500)
+Sample24_seurat <- ScaleData(Sample24_seurat)
+Sample24_seurat <- RunPCA(Sample24_seurat)
+Sample24_seurat <- RunUMAP(Sample24_seurat, dims = 1:10)
+
+DimPlot(Sample24_seurat)
+FeaturePlot(Sample24_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+#Sample 38
+Sample38_seurat <- NormalizeData(Sample38_seurat)
+Sample38_seurat <- FindVariableFeatures(Sample38_seurat,
+                                                 selection.method = 'vst', 
+                                                 nfeatures = 500)
+Sample38_seurat <- ScaleData(Sample38_seurat)
+Sample38_seurat <- RunPCA(Sample38_seurat)
+Sample38_seurat <- RunUMAP(Sample38_seurat, dims = 1:10)
+
+DimPlot(Sample38_seurat)
+FeaturePlot(Sample38_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+
+#Sample 12C
+Sample12C_seurat <- NormalizeData(Sample12C_seurat)
+Sample12C_seurat <- FindVariableFeatures(Sample12C_seurat,
+                                                 selection.method = 'vst', 
+                                                 nfeatures = 500)
+Sample12C_seurat <- ScaleData(Sample12C_seurat)
+Sample12C_seurat <- RunPCA(Sample12C_seurat)
+Sample12C_seurat <- RunUMAP(Sample12C_seurat, dims = 1:10)
+
+DimPlot(Sample12C_seurat)
+FeaturePlot(Sample12C_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+
+#Sample NC2
+SampleNC2_seurat <- NormalizeData(SampleNC2_seurat)
+SampleNC2_seurat <- FindVariableFeatures(SampleNC2_seurat,
+                                                 selection.method = 'vst', 
+                                                 nfeatures = 500)
+SampleNC2_seurat <- ScaleData(SampleNC2_seurat)
+SampleNC2_seurat <- RunPCA(SampleNC2_seurat)
+SampleNC2_seurat <- RunUMAP(SampleNC2_seurat, dims = 1:10)
+
+DimPlot(SampleNC2_seurat)
+FeaturePlot(SampleNC2_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+
+#Sample 24C
+Sample24C_seurat <- NormalizeData(Sample24C_seurat)
+Sample24C_seurat <- FindVariableFeatures(Sample24C_seurat,
+                                                 selection.method = 'vst', 
+                                                 nfeatures = 500)
+Sample24C_seurat <- ScaleData(Sample24C_seurat)
+Sample24C_seurat <- RunPCA(Sample24C_seurat, assay = )
+Sample24C_seurat <- RunUMAP(Sample24C_seurat, dims = 1:10)
+
+DimPlot(Sample24C_seurat)
+FeaturePlot(Sample24C_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+
+#Sample 38C
+Sample38C_seurat <- NormalizeData(Sample38C_seurat)
+Sample38C_seurat <- FindVariableFeatures(Sample38C_seurat,
+                                                 selection.method = 'vst', 
+                                                 nfeatures = 500)
+
+Sample38C_seurat <- ScaleData(Sample38C_seurat)
+Sample38C_seurat <- RunPCA(Sample38C_seurat)
+Sample38C_seurat <- RunUMAP(Sample38C_seurat, dims = 1:10)
+DimPlot(Sample38C_seurat)
+FeaturePlot(Sample38C_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+
+```
+
+
+
+
+B) Follow example from NBIS [tutorial](https://nbisweden.github.io/workshop-scRNAseq/labs/compiled/seurat/seurat_01_qc.html#Predict_doublets)
+
+```{r, pK}
+## Run parameter optimization with paramSweep. 
+## Need to look into how many PCs we want to use, and which pK value is best. 
+
+#Sample 12
+sweep_Sample12 <- paramSweep_v3(Sample12_seurat, PCs = 1:10, sct = FALSE)
+sweep.stats_Sample12 <- summarizeSweep(sweep_Sample12, GT = FALSE)
+bcmvn_Sample12 <- find.pK(sweep.stats_Sample12)
+ggplot(bcmvn_Sample12, aes(x = pK, y = BCmetric)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) #0.06
+
+#Sample 24
+sweep_Sample24 <- paramSweep_v3(Sample24_seurat, PCs = 1:10, sct = FALSE)
+sweep.stats_Sample24 <- summarizeSweep(sweep_Sample24, GT = FALSE)
+bcmvn_Sample24 <- find.pK(sweep.stats_Sample24)
+ggplot(bcmvn_Sample24, aes(x = pK, y = BCmetric)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) #0.005
+
+#Sample 38
+sweep_Sample38 <- paramSweep_v3(Sample38_seurat, PCs = 1:10, sct = FALSE)
+sweep.stats_Sample38 <- summarizeSweep(sweep_Sample38, GT = FALSE)
+bcmvn_Sample38 <- find.pK(sweep.stats_Sample38)
+ggplot(bcmvn_Sample38, aes(x = pK, y = BCmetric)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) #0.3
+
+#Sample 12C
+sweep_Sample12C <- paramSweep_v3(Sample12C_seurat, PCs = 1:10, sct = FALSE)
+sweep.stats_Sample12C <- summarizeSweep(sweep_Sample12C, GT = FALSE)
+bcmvn_Sample12C <- find.pK(sweep.stats_Sample12C)
+ggplot(bcmvn_Sample12C, aes(x = pK, y = BCmetric)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) #0.005
+
+#Sample NC2
+sweep_SampleNC2 <- paramSweep_v3(SampleNC2_seurat, PCs = 1:10, sct = FALSE)
+sweep.stats_SampleNC2 <- summarizeSweep(sweep_SampleNC2, GT = FALSE)
+bcmvn_SampleNC2 <- find.pK(sweep.stats_SampleNC2)
+ggplot(bcmvn_SampleNC2, aes(x = pK, y = BCmetric)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) #0.005
+
+#Sample 24C
+sweep_Sample24C <- paramSweep_v3(Sample24C_seurat, PCs = 1:10, sct = FALSE)
+sweep.stats_Sample24C <- summarizeSweep(sweep_Sample24C, GT = FALSE)
+bcmvn_Sample24C <- find.pK(sweep.stats_Sample24C)
+ggplot(bcmvn_Sample24C, aes(x = pK, y = BCmetric)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) #0.01
+
+#Sample 38C
+sweep_Sample38C <- paramSweep_v3(Sample38C_seurat, PCs = 1:10, sct = FALSE)
+sweep.stats_Sample38C <- summarizeSweep(sweep_Sample38C, GT = FALSE)
+bcmvn_Sample38C <- find.pK(sweep.stats_Sample38C)
+ggplot(bcmvn_Sample38C, aes(x = pK, y = BCmetric)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) #0.19
+
+```
+
+
+
+I think the best pK value is 0.24
+We expect ~7.6% of doublets
+I have not been able to go past this step because of lack of memory
+```{r, define expected number of doublet cells}
+#Sample 12
+nExp12 <- round(ncol(Sample12_seurat) * 0.076)
+Sample12_seurat <- doubletFinder_v3(Sample12_seurat, pN = 0.25, pK = 0.22, 
+                                nExp = nExp12, PCs = 1:10)
+
+#Sample 24
+nExp24 <- round(ncol(Sample24_seurat) * 0.076)
+Sample24_seurat <- doubletFinder_v3(Sample24_seurat, pN = 0.25, pK = 0.005, 
+                                nExp = nExp24, PCs = 1:10)
+
+#Sample 38
+nExp38 <- round(ncol(Sample38_seurat) * 0.076)
+Sample38_seurat <- doubletFinder_v3(Sample38_seurat, pN = 0.25, pK = 0.3, 
+                                nExp = nExp38, PCs = 1:10)
+
+#Sample 12C
+nExp12C <- round(ncol(Sample12C_seurat) * 0.076)
+Sample12C_seurat <- doubletFinder_v3(Sample12C_seurat, pN = 0.25, pK = 0.28, 
+                                nExp = nExp12C, PCs = 1:10)
+#Sample NC2
+nExpNC2 <- round(ncol(SampleNC2_seurat) * 0.076)
+SampleNC2_seurat <- doubletFinder_v3(SampleNC2_seurat, pN = 0.25, pK = 0.005, 
+                                nExp = nExpNC2, PCs = 1:10)
+
+#Sample 24C
+nExp24C <- round(ncol(Sample24C_seurat) * 0.076)
+Sample24C_seurat <- doubletFinder_v3(Sample24C_seurat, pN = 0.25, pK = 0.005, 
+                                nExp = nExp24C, PCs = 1:10)
+
+#Sample 38C
+nExp38C <- round(ncol(Sample38C_seurat) * 0.076)
+Sample38C_seurat <- doubletFinder_v3(Sample38C_seurat, pN = 0.25, pK = 0.24, 
+                                nExp = nExp38C, PCs = 1:10)
+
+```
+
+```{r, plot predictions }
+#Sample 12
+DF.name12 <- 
+  colnames(Sample12_seurat@meta.data)[grepl("DF.classification", 
+                                        colnames(Sample12_seurat@meta.data))]
+cowplot::plot_grid(ncol = 2, 
+                   DimPlot(Sample12_seurat, group.by = "orig.ident") + NoAxes(),
+                   DimPlot(Sample12_seurat, group.by = DF.name12) + NoAxes())
+
+#Sample 24
+DF.name24 <- 
+  colnames(Sample24_seurat@meta.data)[grepl("DF.classification", 
+                                        colnames(Sample24_seurat@meta.data))]
+cowplot::plot_grid(ncol = 2, 
+                   DimPlot(Sample24_seurat, group.by = "orig.ident") + NoAxes(),
+                   DimPlot(Sample24_seurat, group.by = DF.name24) + NoAxes())
+
+#Sample 38
+DF.name38 <- 
+  colnames(Sample38_seurat@meta.data)[grepl("DF.classification", 
+                                        colnames(Sample38_seurat@meta.data))]
+cowplot::plot_grid(ncol = 2, 
+                   DimPlot(Sample38_seurat, group.by = "orig.ident") + NoAxes(),
+                   DimPlot(Sample38_seurat, group.by = DF.name38) + NoAxes())
+
+#Sample 12C
+DF.name12C <- 
+  colnames(Sample12C_seurat@meta.data)[grepl("DF.classification", 
+                                        colnames(Sample12C_seurat@meta.data))]
+cowplot::plot_grid(ncol = 2, 
+                   DimPlot(Sample12C_seurat, group.by = "orig.ident") + NoAxes(),
+                   DimPlot(Sample12C_seurat, group.by = DF.name12C) + NoAxes())
+
+#Sample NC2
+DF.nameNC2 <- 
+  colnames(SampleNC2_seurat@meta.data)[grepl("DF.classification", 
+                                        colnames(SampleNC2_seurat@meta.data))]
+cowplot::plot_grid(ncol = 2, 
+                   DimPlot(SampleNC2_seurat, group.by = "orig.ident") + NoAxes(),
+                   DimPlot(SampleNC2_seurat, group.by = DF.nameNC2) + NoAxes())
+
+#Sample 24C
+DF.name24C <- 
+  colnames(Sample24C_seurat@meta.data)[grepl("DF.classification", 
+                                        colnames(Sample24C_seurat@meta.data))]
+cowplot::plot_grid(ncol = 2, 
+                   DimPlot(Sample24C_seurat, group.by = "orig.ident") + NoAxes(),
+                   DimPlot(Sample24C_seurat, group.by = DF.name24C) + NoAxes())
+
+#Sample 38C
+DF.name38C <- 
+  colnames(Sample38C_seurat@meta.data)[grepl("DF.classification", 
+                                        colnames(Sample38C_seurat@meta.data))]
+cowplot::plot_grid(ncol = 2, 
+                   DimPlot(Sample38C_seurat, group.by = "orig.ident") + NoAxes(),
+                   DimPlot(Sample38C_seurat, group.by = DF.name38C) + NoAxes())
+
+
+```
+
+```{r, check: do doublets have more detected genes in general?}
+
+#Sample 12
+VlnPlot(Sample12_seurat, features = "nFeature_RNA", 
+        group.by = DF.name12, pt.size = 0.1)
+
+#Sample 24
+VlnPlot(Sample24_seurat, features = "nFeature_RNA", 
+        group.by = DF.name24, pt.size = 0.1)
+
+#Sample 38
+VlnPlot(Sample38_seurat, features = "nFeature_RNA", 
+        group.by = DF.name38, pt.size = 0.1)
+
+#Sample 12C
+VlnPlot(Sample12C_seurat, features = "nFeature_RNA", 
+        group.by = DF.name12C, pt.size = 0.1)
+
+#Sample NC2
+VlnPlot(SampleNC2_seurat, features = "nFeature_RNA", 
+        group.by = DF.nameNC2, pt.size = 0.1)
+
+#Sample 24C
+VlnPlot(Sample24C_seurat, features = "nFeature_RNA", 
+        group.by = DF.name24C, pt.size = 0.1)
+
+#Sample 38C
+VlnPlot(Sample38C_seurat, features = "nFeature_RNA", 
+        group.by = DF.name38C, pt.size = 0.1)
+```
+
+```{r, Remove all doublets from the data }
+#nse_ 12
+nse_12 = 
+  Sample12_seurat[, Sample12_seurat@meta.data[, DF.name12] == "Singlet"]
+
+#nse_ 24
+nse_24 = 
+  Sample24_seurat[, Sample24_seurat@meta.data[, DF.name24] == "Singlet"]
+
+#nse_ 38
+nse_38 = 
+  Sample38_seurat[, Sample38_seurat@meta.data[, DF.name38] == "Singlet"]
+
+#nse_ 12C
+nse_12C = 
+  Sample12C_seurat[, Sample12C_seurat@meta.data[, DF.name12C] == "Singlet"]
+
+#nse_ NC2
+nse_NC2 = 
+  SampleNC2_seurat[, SampleNC2_seurat@meta.data[, DF.nameNC2] == "Singlet"]
+
+#nse_ 24C
+nse_24C = 
+  Sample24C_seurat[, Sample24C_seurat@meta.data[, DF.name24C] == "Singlet"]
+
+#nse_ 38C
+nse_38C = 
+  Sample38C_seurat[, Sample38C_seurat@meta.data[, DF.name38C] == "Singlet"]
+
+```
+
+Save all filtered seurat objects with doublets removed, individually and merged. 
+They can be found in the folder
+nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/seurat/
+```{r, save seurat objects}
+# As individual
+saveRDS(nse_12, 
+        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_12_singlets.RDS")
+
+saveRDS(nse_24, 
+        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_24_singlets.RDS")
+
+saveRDS(nse_38, 
+        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_38_singlets.RDS")
+
+saveRDS(nse_12C, 
+        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_12C_singlets.RDS")
+
+saveRDS(nse_NC2, 
+        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_NC2_singlets.RDS")
+
+saveRDS(nse_24C, 
+        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_24C_singlets.RDS")
+
+saveRDS(nse_38C, 
+        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_38C_singlets.RDS")
+
+```

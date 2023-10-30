@@ -1,0 +1,6 @@
+count_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-12h/tsv/norm/inf/CN57_12h_D1_stdata_norm.tsv.gz"
+spot_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-12h/spots/spot_selected-CN57_C1.tsv"
+image: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-12h/HE/210412_CN57_PB_12h_G-C_HE_C1_0.1.jpg"
+mask: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-12h/masks/CN57_PB_12h_HE_C1_mask_0.1.jpg"
+rgb:
+  parasite: [0,255,0]

@@ -1,0 +1,407 @@
+---
+title: "nuceSeq_200323"
+author: "Franziska Hildebrandt"
+date: "2023-03-20"
+output: html_document
+---
+
+```{r, define your working directory (path to github repo), results='hide', message=FALSE}
+
+repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas/"
+
+```
+
+
+
+```{r load seurat infected objects}
+
+nse_12 <- readRDS(paste0(repo, "data/Sample12_singlets.RDS"))
+nse_24 <- readRDS(paste0(repo, "data/Sample24_singlets.RDS"))
+nse_38 <- readRDS(paste0(repo, "data/Sample38_singlets.RDS"))
+
+```
+
+
+
+```{r check QCs again, run PCA and UMAP analysis, 12 hpi}
+
+FeaturePlot(nse_12, features = c("nCount_RNA", "nFeature_RNA"))
+FeatureScatter(nse_12, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+nse_12 <- SCTransform(nse_12, variable.features.n = 500)
+FeaturePlot(nse_12, features = c("nCount_SCT", "nFeature_SCT"))
+FeatureScatter(nse_12, feature1 = "nCount_SCT", feature2 = "nFeature_SCT")
+nse_12 <- RunPCA(nse_12)
+
+ElbowPlot(nse_12)
+nse_12 <- RunUMAP(nse_12, dims = c(1:10), min.dist = 0.3, spread = 1)
+DimPlot(nse_12)
+nse_12 <- FindNeighbors(nse_12, dims = c(1:10))
+nse_12 <- FindClusters(nse_12, resolution = 0.3)
+DimPlot(nse_12)
+
+FeaturePlot(nse_12, features = c( "Glul","Sds", "Hnf4a", "Spp1", "Clec4f", "Pecam1", "HSP90-pb", "Saa1","Saa2", "Saa3", "Car3", "Ifit3", "Cyp2e1", "Cyp2f2", "Icam1", "Vim"))
+
+#saveRDS(nse_12, "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/Sample12_500.RDS")
+```
+
+```{r check QCs again, run PCA and UMAP analysis, 24 hpi}
+
+FeaturePlot(nse_24, features = c("nCount_RNA", "nFeature_RNA"))
+FeatureScatter(nse_24, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+nse_24 <- SCTransform(nse_24, variable.features.n = 500)
+FeaturePlot(nse_24, features = c("nCount_SCT", "nFeature_SCT"))
+FeatureScatter(nse_24, feature1 = "nCount_SCT", feature2 = "nFeature_SCT")
+
+nse_24 <- RunPCA(nse_24)
+ElbowPlot(nse_24)
+nse_24 <- RunUMAP(nse_24, dims = c(1:10), min.dist = 0.3, spread = 1)
+DimPlot(nse_24)
+nse_24 <- FindNeighbors(nse_24, dims = c(1:10))
+nse_24 <- FindClusters(nse_24, resolution = 0.3)
+
+DimPlot(nse_24)
+
+FeaturePlot(nse_24, features = c(  "Glul","Sds", "Hnf4a", "Spp1", "Clec4f", "Pecam1", "HSP90-pb", "Saa1","Saa2", "Saa3", "Car3", "Ifit3", "Cyp2e1", "Cyp2f2", "Icam1", "Vim", "Ccl5", "Cd14"))
+
+#saveRDS(nse_24, "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/Sample24_500.RDS")
+
+```
+
+```{r check QCs again, run PCA and UMAP analysis, 24 hpi}
+
+FeaturePlot(nse_38, features = c("nCount_RNA", "nFeature_RNA", "Percent.pb"))
+FeatureScatter(nse_38, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+nse_38 <- SCTransform(nse_38, variable.features.n = 500)
+FeaturePlot(nse_38, features = c("nCount_SCT", "nFeature_SCT"))
+FeatureScatter(nse_38, feature1 = "nCount_SCT", feature2 = "nFeature_SCT")
+nse_38 <- RunPCA(nse_38)
+ElbowPlot(nse_38)
+nse_38 <- RunUMAP(nse_38, dims = c(1:10), min.dist = 0.05, spread = 1)
+DimPlot(nse_38)
+nse_38 <- FindNeighbors(nse_38, dims = c(1:10))
+nse_38 <- FindClusters(nse_38, resolution = 0.3)
+DimPlot(nse_38)
+
+#Get markers for clusters: 
+FeaturePlot(nse_38, features = c( "Glul","Sds", "Hnf4a", "Spp1", "Clec4f", "Pecam1", "HSP90-pb", "Saa1","Saa2", "Saa3", "Car3", "Ifit3", "Cyp2e1", "Cyp2f2", "Icam1", "Vim", "Ccl5", "Cd14"))
+
+nrow(nse_38)
+
+#markers_nse38 <- FindAllMarkers(nse_38, only.pos = T)
+
+#top20de <- markers_nse38 %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC)
+
+
+#saveRDS(nse_38, "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/Sample38_500.RDS")
+
+```
+
+```{r load seurat control objects}
+
+nse_12C <- readRDS(paste0(repo, "data/Sample12C_singlets.RDS"))
+nse_24C <- readRDS(paste0(repo, "data/Sample24C_singlets.RDS"))
+nse_38C <- readRDS(paste0(repo, "data/Sample38C_singlets.RDS"))
+nse_NC2 <- readRDS(paste0(repo, "data/SampleNC2_singlets.RDS"))
+
+```
+
+```{r check QCs again, run PCA and UMAP analysis, 12 hpi}
+
+FeaturePlot(nse_12C, features = c("nCount_RNA", "nFeature_RNA"))
+FeatureScatter(nse_12C, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+nse_12C <- SCTransform(nse_12C, variable.features.n = 500)
+FeaturePlot(nse_12C, features = c("nCount_SCT", "nFeature_SCT"))
+FeatureScatter(nse_12C, feature1 = "nCount_SCT", feature2 = "nFeature_SCT")
+nse_12C <- RunPCA(nse_12C)
+ElbowPlot(nse_12C)
+nse_12C <- RunUMAP(nse_12C, dims = c(1:10), min.dist = 0.01, spread = 5)
+DimPlot(nse_12C)
+FeaturePlot(nse_12C, features = c( "nFeature_RNA"))
+nse_12C <- FindNeighbors(nse_12C, dims = c(1:10))
+nse_12C <- FindClusters(nse_12C, resolution = 0.3)
+DimPlot(nse_12C)
+
+
+FeaturePlot(nse_12C, features = c( "Glul","Sds", "Hnf4a", "Spp1", "Clec4f", "Pecam1"))
+
+
+```
+
+```{r check QCs again, run PCA and UMAP analysis, 24 hpi}
+
+FeaturePlot(nse_24C, features = c("nCount_RNA", "nFeature_RNA"))
+FeatureScatter(nse_24C, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+nse_24C <- SCTransform(nse_24C, variable.features.n = 500)
+FeaturePlot(nse_24C, features = c("nCount_SCT", "nFeature_SCT"))
+FeatureScatter(nse_24C, feature1 = "nCount_SCT", feature2 = "nFeature_SCT")
+nse_24C <- RunPCA(nse_24C)
+ElbowPlot(nse_24C)
+nse_24C <- RunUMAP(nse_24C, dims = c(1:10), min.dist = 0.3, spread = 1)
+DimPlot(nse_24C)
+nse_24C <- FindNeighbors(nse_24C, dims = c(1:10))
+nse_24C <- FindClusters(nse_24C, resolution = 0.3)
+DimPlot(nse_24C)
+
+FeaturePlot(nse_24C, features = c( "Glul","Sds", "Hnf4a", "Spp1", "Clec4f", "Pecam1"))
+
+
+```
+
+```{r check QCs again, run PCA and UMAP analysis, 24 hpi}
+
+FeaturePlot(nse_38C, features = c("nCount_RNA", "nFeature_RNA"))
+FeatureScatter(nse_24, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+nse_38C <- SCTransform(nse_38C, variable.features.n = 500)
+FeaturePlot(nse_38C, features = c("nCount_SCT", "nFeature_SCT"))
+FeatureScatter(nse_38C, feature1 = "nCount_SCT", feature2 = "nFeature_SCT")
+nse_38C <- RunPCA(nse_38C)
+ElbowPlot(nse_38C)
+nse_38C <- RunUMAP(nse_38C, dims = c(1:10), min.dist = 0.05, spread = 1)
+DimPlot(nse_38C)
+nse_38C <- FindNeighbors(nse_38C, dims = c(1:10))
+nse_38C <- FindClusters(nse_38C, resolution = 0.3)
+DimPlot(nse_38C)
+
+#Get markers for clusters: 
+FeaturePlot(nse_38C, features = c( "Glul","Sds", "Hnf4a", "Spp1", "Clec4f", "Pecam1"))
+
+
+```
+
+
+
+```{r check QCs again, run PCA and UMAP analysis, 24 hpi}
+
+FeaturePlot(nse_NC2, features = c("nCount_RNA", "nFeature_RNA"))
+FeatureScatter(nse_NC2, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+nse_NC2 <- SCTransform(nse_NC2, variable.features.n = 500)
+FeaturePlot(nse_NC2, features = c("nCount_SCT", "nFeature_SCT"))
+FeatureScatter(nse_NC2, feature1 = "nCount_SCT", feature2 = "nFeature_SCT")
+nse_NC2 <- RunPCA(nse_NC2)
+ElbowPlot(nse_NC2)
+nse_NC2 <- RunUMAP(nse_NC2, dims = c(1:10), min.dist = 0.05, spread = 1)
+DimPlot(nse_NC2)
+nse_NC2 <- FindNeighbors(nse_NC2, dims = c(1:10))
+nse_NC2 <- FindClusters(nse_NC2, resolution = 0.3)
+DimPlot(nse_NC2)
+
+
+#Get markers for clusters: 
+FeaturePlot(nse_NC2, features = c( "Glul","Sds", "Hnf4a", "Spp1", "Clec4f", "Pecam1"))
+
+nse_NC2_markers <- FindAllMarkers(nse_NC2, logfc.threshold = 0.25, only.pos = T)
+
+
+```
+
+```{r, run log-normalization and scaling again}
+
+object.list <- list(nse_12, nse_24, nse_38, nse_12C, nse_24C, nse_38C,nse_NC)
+object.list <- sapply(object.list, function(x){
+  
+  x <- NormalizeData(x)
+  x <- FindVariableFeatures(x, nfeatures = 2000, selection.method = 'vst')
+  x <- ScaleData(x)
+  x <- RunPCA(x)
+  x <- RunUMAP(x, dims = c(1:10), min.dist = 0.05, spread = 1)
+  x <- FindNeighbors(x,dims = 1:10)
+  x <- FindClusters(x, res = 0.3)
+  
+})
+
+
+```
+
+
+```{r, save all objects}
+
+saveRDS(object.list[[1]], paste0(repo, "data/nse12_newnorm_18042023.RDS"))
+saveRDS(object.list[[2]], paste0(repo, "data/nse24_newnorm_18042023.RDS"))
+saveRDS(object.list[[3]], paste0(repo, "data/nse38_newnorm_18042023.RDS"))
+saveRDS(object.list[[4]], paste0(repo, "data/nse12C_newnorm_18042023.RDS"))
+saveRDS(object.list[[5]], paste0(repo, "data/nse24C_newnorm_18042023.RDS"))
+saveRDS(object.list[[6]], paste0(repo, "data/nse38C_newnorm_18042023.RDS"))
+saveRDS(object.list[[7]], paste0(repo, "data/nseNC_newnorm_18042023.RDS"))
+
+```
+
+```{r, get DEGs for clusters identified in sn analysis}
+
+#infected
+deg_12 <- FindAllMarkers(nse_12, logfc.tresold = 0.5, min.pct = 0.6, only.pos = T)
+deg_12 <- subset(deg_12, deg_12$p_val_adj <= 0.05)
+deg_12 <- deg_12[order(deg_12$avg_log2FC, decreasing = T),]
+
+deg_24 <- FindAllMarkers(nse_24, logfc.tresold = 0.5, min.pct = 0.6, only.pos = T)
+deg_24 <- subset(deg_24, deg_24$p_val_adj <= 0.05)
+deg_24 <- deg_24[order(deg_24$avg_log2FC, decreasing = T),]
+
+deg_38 <- FindAllMarkers(nse_38, logfc.tresold = 0.5, min.pct = 0.6, only.pos = T)
+deg_38 <- subset(deg_38, deg_38$p_val_adj <= 0.05)
+deg_38 <- deg_38[order(deg_38$avg_log2FC, decreasing = T),]
+
+#ctrl
+deg_12C <- FindAllMarkers(nse_12C, logfc.tresold = 0.5, min.pct = 0.6, only.pos = T)
+deg_12C <- subset(deg_12C, deg_12C$p_val_adj <= 0.05)
+deg_12C <- deg_12C[order(deg_12C$avg_log2FC, decreasing = T),]
+
+deg_24C <- FindAllMarkers(nse_24C, logfc.tresold = 0.5, min.pct = 0.6, only.pos = T)
+deg_24C <- subset(deg_24C, deg_24C$p_val_adj <= 0.05)
+deg_24C <- deg_24C[order(deg_24C$avg_log2FC, decreasing = T),]
+
+deg_38C <- FindAllMarkers(nse_38C, logfc.tresold = 0.5, min.pct = 0.6, only.pos = T)
+deg_38C <- subset(deg_38C, deg_38C$p_val_adj <= 0.05)
+deg_38C <- deg_38C[order(deg_38C$avg_log2FC, decreasing = T),]
+
+deg_NC2 <- FindAllMarkers(nse_NC2, logfc.tresold = 0.5, min.pct = 0.6, only.pos = T)
+deg_NC2 <- subset(deg_NC2, deg_NC2$p_val_adj <= 0.05)
+deg_NC2 <- deg_12C[order(deg_12C$avg_log2FC, decreasing = T),]
+
+```
+
+```{r stratify deg lists}
+
+#First we would like to see which genes are present in all datasets: 
+
+shared_deg <- intersect(deg_12h$gene, c(deg_12Ch$gene, deg_24h$gene, deg_24Ch$gene, deg_38h$gene, deg_38Ch$gene, deg_NCh$gene))
+
+#Subset to only include unique genes (showing up in only one cluster --> we might have to adjust that so we remove all the genes that appear in multiple clusters)
+
+s.deg_12h <- subset(deg_12h, deg_12h$gene %in% shared_deg)
+duplicated_12h <- duplicated(s.deg_12h$gene) | duplicated(s.deg_12h$gene, fromLast = TRUE)
+s.deg_12h <- s.deg_12h[!duplicated_12h,]
+s.deg_12h <- s.deg_12h[order(s.deg_12h$cluster, decreasing = T),]
+
+s.deg_24h <- subset(deg_24h, deg_24h$gene %in% shared_deg)
+duplicated_24h <- duplicated(s.deg_24h$gene) | duplicated(s.deg_24h$gene, fromLast = TRUE)
+s.deg_24h <- s.deg_24h[!duplicated_24h,]
+s.deg_24h <- s.deg_24h[order(s.deg_24h$cluster, decreasing = T),]
+
+s.deg_38h <- subset(deg_38h, deg_38h$gene %in% shared_deg)
+duplicated_38h <- duplicated(s.deg_38h$gene) | duplicated(s.deg_38h$gene, fromLast = TRUE)
+s.deg_38h <- s.deg_38h[!duplicated_38h,]
+s.deg_38h <- s.deg_38h[order(s.deg_38h$cluster, decreasing = T),]
+
+s.deg_12Ch <- subset(deg_12Ch, deg_12Ch$gene %in% shared_deg)
+duplicated_12Ch <- duplicated(s.deg_12Ch$gene) | duplicated(s.deg_12Ch$gene, fromLast = TRUE)
+s.deg_12Ch <- s.deg_12Ch[!duplicated_12Ch,]
+s.deg_12Ch <- s.deg_12Ch[order(s.deg_12Ch$cluster, decreasing = T),]
+
+s.deg_24Ch <- subset(deg_24Ch, deg_24Ch$gene %in% shared_deg)
+duplicated_24Ch <- duplicated(s.deg_24Ch$gene) | duplicated(s.deg_24Ch$gene, fromLast = TRUE)
+s.deg_24Ch <- s.deg_24Ch[!duplicated_24Ch,]
+s.deg_24Ch <- s.deg_24Ch[order(s.deg_24Ch$cluster, decreasing = T),]
+
+s.deg_38Ch <- subset(deg_38Ch, deg_38Ch$gene %in% shared_deg)
+duplicated_38Ch <- duplicated(s.deg_38Ch$gene) | duplicated(s.deg_38Ch$gene, fromLast = TRUE)
+s.deg_38Ch <- s.deg_38Ch[!duplicated_38Ch,]
+s.deg_38Ch <- s.deg_38Ch[order(s.deg_38Ch$cluster, decreasing = T),]
+
+s.deg_NCh <- subset(deg_NCh, deg_NCh$gene %in% shared_deg)
+duplicated_NCh <- duplicated(s.deg_NCh$gene) | duplicated(s.deg_NCh$gene, fromLast = TRUE)
+s.deg_NCh <- s.deg_NCh[!duplicated_NCh,]
+s.deg_NCh <- s.deg_NCh[order(s.deg_NCh$cluster, decreasing = T),]
+#Now we can set the clusters to factors and sort again according to clusters and visualize the most highly expressed genes in a heatmap
+
+```
+
+```{r get degs for individual samples}
+
+duplicated_12h <- duplicated(deg_12h$gene) | duplicated(deg_12h$gene, fromLast = TRUE)
+deg_12h <- deg_12h[!duplicated_12h,]
+deg_12h <- deg_12h[order(deg_12h$cluster, decreasing = T),]
+
+
+duplicated_24h <- duplicated(deg_24h$gene) | duplicated(deg_24h$gene, fromLast = TRUE)
+deg_24h <- deg_24h[!duplicated_24h,]
+deg_24h <- deg_24h[order(deg_24h$cluster, decreasing = T),]
+
+duplicated_38h <- duplicated(deg_38h$gene) | duplicated(deg_38h$gene, fromLast = TRUE)
+deg_38h <- deg_38h[!duplicated_38h,]
+deg_38h <- deg_38h[order(deg_38h$cluster, decreasing = T),]
+
+duplicated_12Ch <- duplicated(deg_12Ch$gene) | duplicated(deg_12Ch$gene, fromLast = TRUE)
+deg_12Ch <- deg_12Ch[!duplicated_12Ch,]
+deg_12Ch <- deg_12Ch[order(deg_12Ch$cluster, decreasing = T),]
+
+duplicated_24Ch <- duplicated(deg_24Ch$gene) | duplicated(deg_24Ch$gene, fromLast = TRUE)
+deg_24Ch <- deg_24Ch[!duplicated_24Ch,]
+deg_24Ch <- deg_24Ch[order(deg_24Ch$cluster, decreasing = T),]
+
+duplicated_38Ch <- duplicated(deg_38Ch$gene) | duplicated(deg_38Ch$gene, fromLast = TRUE)
+deg_38Ch <- deg_38Ch[!duplicated_38Ch,]
+deg_38Ch <- deg_38Ch[order(deg_38Ch$cluster, decreasing = T),]
+
+duplicated_NCh <- duplicated(deg_NCh$gene) | duplicated(deg_NCh$gene, fromLast = TRUE)
+deg_NCh <- deg_NCh[!duplicated_NCh,]
+deg_NCh <- deg_NCh[order(deg_NCh$cluster, decreasing = T),]
+
+
+```
+
+Now I am curious if this improves if we merge our objects after the filtering process and use harmony to integrate them 
+
+```{r, merge all data}
+
+merge_se <- merge(nse_12, list(nse_12C, nse_24, nse_24C, nse_38, nse_38C, nse_NC2))
+merge_se <- SCTransform(merge_se, variable.features.n = 500)
+merge_se <- RunPCA(merge_se,dims = c(1:10) )
+merge_se <- RunHarmony(merge_se, group.by.vars = "orig.ident")
+merge_se <- RunUMAP(merge_se, reduction = "harmony", dims = c(1:10), min.dist = 0.5, spread = 1)
+merge_se <- FindNeighbors(merge_se, reduction = "harmony", dims = 1:10)
+merge_se <- FindClusters(merge_se, resolution = 0.3)
+DimPlot(merge_se, raster = F)
+DimPlot(merge_se, group.by = "merged_type", raster = F)
+DimPlot(merge_se, raster = F, split.by = "seurat_clusters")
+head(merge_se[[]])
+saveRDS(merge_se, paste0(repo, "data/merged_object_annotated_500.RDS"))
+```
+
+```{r, merge differential gene expression data}
+
+merge_deg <- FindAllMarkers(merge_se, logfc.threshold = 0.5, min.pct = 0.5, only.pos = T)
+merge_deg <- subset(merge_deg, p_val_adj < 0.01)
+
+deg0 <- merge_deg[merge_deg$cluster == "0",]
+deg0[order(deg0$avg_log2FC, decreasing = T),]
+
+deg1 <- merge_deg[merge_deg$cluster == "1",]
+deg1[order(deg1$avg_log2FC, decreasing = T),]
+
+deg2 <- merge_deg[merge_deg$cluster == "2",]
+deg2[order(deg2$avg_log2FC, decreasing = T),]
+
+deg3 <- merge_deg[merge_deg$cluster == "3",]
+deg3[order(deg3$avg_log2FC, decreasing = T),]
+
+deg4 <- merge_deg[merge_deg$cluster == "4",]
+deg4[order(deg4$avg_log2FC, decreasing = T),]
+
+deg5 <- merge_deg[merge_deg$cluster == "5",]
+deg5[order(deg5$avg_log2FC, decreasing = T),]
+
+deg6 <- merge_deg[merge_deg$cluster == "6",]
+deg6[order(deg6$avg_log2FC, decreasing = T),]
+
+deg7 <- merge_deg[merge_deg$cluster == "7",]
+deg7[order(deg7$avg_log2FC, decreasing = T),]
+
+deg8 <- merge_deg[merge_deg$cluster == "8",]
+deg8[order(deg8$avg_log2FC, decreasing = T),]
+
+deg9 <- merge_deg[merge_deg$cluster == "9",]
+deg9[order(deg9$avg_log2FC, decreasing = T),]
+
+deg10 <- merge_deg[merge_deg$cluster == "10",]
+deg10[order(deg10$avg_log2FC, decreasing = T),]
+
+deg11 <- merge_deg[merge_deg$cluster == "11",]
+deg11[order(deg11$avg_log2FC, decreasing = T),]
+
+deg12 <- merge_deg[merge_deg$cluster == "12",]
+deg12[order(deg12$avg_log2FC, decreasing = T),]
+
+
+```
+
+

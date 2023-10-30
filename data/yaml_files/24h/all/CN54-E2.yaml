@@ -1,0 +1,10 @@
+count_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-24h/tsv/norm/ctrl/CN54_24h_E2_stdata_norm.tsv.gz"
+spot_data: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-24h/spots/spot_selected-CN54_E2.tsv.gz"
+image: "/Users/franziskahildebrandt/P.Berghei-Liver/data/PB-24h/HE/210327_CN54_24h_H.RP1_L_RP.2_HE.E2_0.1.jpg"
+mask: ""
+rgb:
+  parasite: [0,255,0]
+  central: [255,0,0]
+  portal: [0,0,255]
+  ambigious: [255,0,255]
+  ROI: [255,255,0]
