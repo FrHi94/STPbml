@@ -1,0 +1,136 @@
+---
+title: "Intensity_IHS_analysis"
+author: "Franziska Hildebrandt"
+date: "2023-11-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+First load the intensity data for 1. raw data and 2. binarized data
+
+```{r}
+
+library(readxl)
+
+raw <- read_excel("Downloads/Raw_Data_Hotspots.xlsx", 
+    sheet = "IHS_raw", col_types = c("text", 
+        "text", "text", "text", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "text", "numeric", 
+        "text"))
+
+binary <- read_excel("Downloads/Raw_Data_Hotspots.xlsx", 
+    sheet = "IHS_binary", col_types = c("text", 
+        "text", "text", "text", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "text", "numeric", 
+        "text"))
+
+##remove IBA1 as the staining was incorrect + remove all NA
+
+raw <- raw[raw$Antigen != "IBA1",]
+binary <- binary[binary$Antigen != "IBA1",]
+
+raw <- na.omit(raw)
+raw$Mean <- as.numeric(raw$Mean)
+binary <- na.omit(binary)
+
+head(raw)
+head(binary)
+
+#Change mouse C to Control 24h
+
+raw[raw$Sample %in% "200225_C",]$Timepoint <- gsub(x=raw[raw$Sample %in% "200225_C",]$Timepoint, pattern = "24h", replacement = "24h_C")
+raw
+
+binary[binary$Sample %in% "200225_C",]$Timepoint <- gsub(x=binary[binary$Sample %in% "200225_C",]$Timepoint, pattern = "24h", replacement = "24h_C")
+binary
+
+#Change mouse I to Control 38h
+raw[raw$Sample %in% "200303_I",]$Timepoint <- gsub(x=raw[raw$Sample %in% "200303_I",]$Timepoint, pattern = "38h", replacement = "38h_C")
+raw
+
+binary[binary$Sample %in% "200303_I",]$Timepoint <- gsub(x=binary[binary$Sample %in% "200303_I",]$Timepoint, pattern = "38h", replacement = "38h_C")
+binary
+
+```
+
+Now we can split the data by timepoint
+
+```{r}
+
+raw_12 <- raw[raw$Timepoint %in% "12h",]
+raw_24 <- raw[raw$Timepoint %in% "24h",]
+raw_38 <- raw[raw$Timepoint %in% "38h",]
+raw_24C <- raw[raw$Timepoint %in% "24_C",]
+raw_38C <- raw[raw$Timepoint %in% "38_C",]
+
+binary_12 <- binary[binary$Timepoint %in% "12h",]
+binary_24 <- binary[binary$Timepoint %in% "24h",]
+binary_38 <- binary[binary$Timepoint %in% "38h",]
+binary_24C <- binary[binary$Timepoint %in% "24_C",]
+binary_38C <- binary[binary$Timepoint %in% "38_C",]
+
+
+```
+Now we would like to plot the mean intensity of each antigen across the different hotspots comparing the area_type roi and inverse 
+
+```{r}
+
+p_12h_binary <- ggplot(binary_12, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+  geom_boxplot() +
+  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
+       x = "Antigen",
+       y = "log10(Mean Intensity)") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
+  theme_classic() +
+  coord_flip()
+
+p_24h_binary <- ggplot(binary_24, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+  geom_boxplot() +
+  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
+       x = "Antigen",
+       y = "log10(Mean Intensity)") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
+  theme_classic() +
+  coord_flip()
+
+p_38h_binary <- ggplot(binary_38, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+  geom_boxplot() +
+  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
+       x = "Antigen",
+       y = "log10(Mean Intensity)") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
+  theme_classic() +
+  coord_flip()
+
+p_12h_binary
+
+p_24h_binary
+
+p_38h_binary
+
+p_24C_binary <- ggplot(binary_24C, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+  geom_boxplot() +
+  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
+       x = "Antigen",
+       y = "log10(Mean Intensity)") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
+  theme_classic() +
+  coord_flip()
+
+p_38C_binary <- ggplot(binary_38C, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+  geom_boxplot() +
+  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
+       x = "Antigen",
+       y = "log10(Mean Intensity)") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
+  theme_classic() +
+  coord_flip()
+
+```
+
+
