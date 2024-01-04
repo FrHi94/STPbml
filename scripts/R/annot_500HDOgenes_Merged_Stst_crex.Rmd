@@ -1,0 +1,72 @@
+#Load required libraries
+library(scmap)
+library(SingleCellExperiment)
+library(Seurat)
+library(scater)
+library(ggplot2)
+library(dplyr)
+
+#Setting the working directory
+setwd("/home/mirenui/Desktop/Projects/snseq_Ghent/seq_ghent_analysis/final_annotation/scripts/")
+
+#Read our data from Ghent
+sce_snseq_data <- readRDS("/crex/proj/uppstore2019072/nucSeq_pb_liver_1222/Cell_type_annotation/annotations_fh/merged_singleCellExperiment_1.RDS")
+
+#Format as desired
+rowData(sce_snseq_data)$feature_symbol <- rownames(sce_snseq_data)
+colData(sce_snseq_data)$cell_type1 <- sce_snseq_data@colData$annot
+
+# Load reference data (the data that is already annotated)
+sce_liver_stst <- readRDS("/home/mirenui/Desktop/Projects/snseq_Ghent/seq_ghent_analysis/reference_dataset_Guilliams/Guilliams_SCE_objects/SingleCellExperiment_liver_stst.RDS")
+
+#Format as desired
+rowData(sce_liver_stst)$feature_symbol <- rownames(sce_liver_stst)
+colData(sce_liver_stst)$cell_type1 <- sce_liver_stst@colData$annot
+
+#Remove duplicated genes
+sce_snseq_data <- sce_snseq_data[!duplicated(rownames(sce_snseq_data)), ]
+sce_liver_stst <- sce_liver_stst[!duplicated(rownames(sce_liver_stst)), ]
+
+#Load HVG
+ftrs.file <- paste("/home/mirenui/Desktop/Projects/snseq_Ghent/seq_ghent_analysis/HVGs/outs_HVG/500_HDOgenes_ref_MG.txt")
+
+select.ftrs <- read.table(ftrs.file)$V1
+
+genes_priority = c("Siglech", "Ly6d", "Ccr9", "Cd5l", "Clec4f", "Vsig4",
+                             "Trbc2", "Cd3d", "Ms4a4b", "Lyz2", "Plac8", "Ms4a6c", "Xcl1",
+                             "Ccl5",  "Igkc", "Cd79a", "Ighm", "H2-Eb", "H2-Aa",
+                             "Cd74", "Gzma", "Nkg7", "S100a9", "S100a8", "Retnlg",
+                             "Fscn1", "Ccr7", "Tmem123", "Cst3", "Naaa", "Ppt1", "Ptprb",
+                             "Aqp1", "Clec4g", "Ghr", "Fabp1", "Aldob", "Spp1", "Clu", "Pkhd1",
+                             "Rbms3", "Col14a1", "Lhfp", "Ccl3", "Hdc", "Osm", "Chrm3", "Slc4a4","Dmbt1")
+
+#Set features to reference dataset
+sce_liver_stst <- setFeatures(sce_liver_stst, features = c(select.ftrs, genes_priority))
+
+#Calculate index
+sce_liver_stst <- indexCell(sce_liver_stst)
+
+# Extract the associated cell IDs from the reference and save as a variable
+scmap_cell_metadata <- colData(sce_liver_stst)
+
+#Project annotations
+scmapCell_results <- scmapCell(
+  sce_snseq_data,
+  list(
+   metadata(sce_liver_stst)$scmap_cell_index
+  )
+)
+
+#Cluster annotation
+scmapCell_clusters <- scmapCell2Cluster(
+  scmapCell_results,
+  list(
+    as.character(colData(sce_liver_stst)$cell_type1)
+  )
+)
+
+# Store this annotation information within the query object
+colData(sce_snseq_data)$scmap_cluster <- scmapCell_clusters$scmap_cluster_labs
+
+#Save RDS object to make further plots
+saveRDS(sce_snseq_data, "/crex/proj/uppstore2019072/nucSeq_pb_liver_1222/Cell_type_annotation/Annotated_objects_HD0genes500/Steady_state_annotation/sce_annot_500HDOgenes_merged_Stst.RDS")

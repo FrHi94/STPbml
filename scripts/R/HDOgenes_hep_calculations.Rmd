@@ -1,0 +1,59 @@
+---
+title: "HDO genes hepatocytes"
+author: "Miren Urrutia Iturritza"
+date: "2023-06-07"
+output: html_document
+---
+
+## Setting everything up
+```{r setup, include=FALSE}
+#Setting the working directory
+setwd("/corgi/miren/snseq_Ghent/cell_type_annotation/hepatocyte_annotation/new_cluster_annotation")
+```
+
+```{r install packages, include=FALSE}
+library(scmap)
+library(SingleCellExperiment)
+
+set.seed(2023)
+```
+
+```{r Load reference data set, include=FALSE}
+# Load reference data (the data that is already annotated)
+sce_hepatocytes_MM <- readRDS("/corgi/miren/snseq_Ghent/cell_type_annotation/hepatocyte_annotation/new_cluster_annotation/sce_new_cluster_hepatocyte_annotation_20230614.RDS")
+
+
+
+#Format as desired
+rowData(sce_hepatocytes_MM)$feature_symbol <- rownames(sce_hepatocytes_MM)
+colData(sce_hepatocytes_MM)$cell_type1 <- sce_hepatocytes_MM@colData$ident
+
+
+```
+
+```{r trainset and testset}
+set.seed(2023)
+test_sce_hepatocytes_MM <- sce_hepatocytes_MM[,sample(colnames(sce_hepatocytes_MM), size = ncol(sce_hepatocytes_MM)/5)]
+
+train_sce_hepatocytes_MM <- sce_hepatocytes_MM[,colnames(sce_hepatocytes_MM)%in%colnames(test_sce_hepatocytes_MM) == F]
+```
+
+```{r write file}
+write.table(colnames(train_sce_hepatocytes_MM), file = "/corgi/miren/snseq_Ghent/cell_type_annotation/hepatocyte_annotation/hep_cellID_train_ref_MM_minusPBANKA.txt", sep = '\n', quote = F, row.names = F, col.names = F)
+```
+
+```{r Make calculations}
+#select genes from reference
+sce <- train_sce_hepatocytes_MM[!duplicated(rownames(train_sce_hepatocytes_MM)), ]
+
+outfile <- 'HDOgenes_ref_MM_hepatocytes_minusPBANKA'
+
+for(nftrs in c(500)){
+  print(nftrs)
+  sce <- selectFeatures(sce, n_features = nftrs, suppress_plot = F)
+  nftrs.outfile = paste('/corgi/miren/snseq_Ghent/cell_type_annotation/hepatocyte_annotation/new_cluster_annotation', nftrs, '_',outfile,'.txt', sep = '')
+  write.table(as.character(sce@rowRanges@elementMetadata[sce@rowRanges@elementMetadata$scmap_features==T,]$feature_symbol), file = nftrs.outfile, sep = '\n', quote = F, row.names = F, col.names = F)
+  
+  gc(gc())
+}
+```
