@@ -13,21 +13,15 @@ First load the intensity data for 1. raw data and 2. binarized data
 
 ```{r}
 
-library(readxl)
+raw <- read.table("/Users/franziskahildebrandt/Downloads/Raw_Data_Hotspots_IHSraw.csv", header = T, dec = ".", check.names = T, sep = ";")
+raw <- raw[,1:13]
+head(raw)
 
-raw <- read_excel("Downloads/Raw_Data_Hotspots.xlsx", 
-    sheet = "IHS_raw", col_types = c("text", 
-        "text", "text", "text", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "text", "numeric", 
-        "text"))
+binary <- read.table("/Users/franziskahildebrandt/Downloads/raw_Data_Hotspots_IHSbinary_csv.csv", header = T, dec = ".", check.names = T, sep = ";")
+binary <- binary[,1:13]
+head(binary)
 
-binary <- read_excel("Downloads/Raw_Data_Hotspots.xlsx", 
-    sheet = "IHS_binary", col_types = c("text", 
-        "text", "text", "text", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "text", "numeric", 
-        "text"))
+library(dplyr)
 
 ##remove IBA1 as the staining was incorrect + remove all NA
 
@@ -51,15 +45,32 @@ binary
 
 #Change mouse I to Control 38h
 raw[raw$Sample %in% "200303_I",]$Timepoint <- gsub(x=raw[raw$Sample %in% "200303_I",]$Timepoint, pattern = "38h", replacement = "38h_C")
-raw
+
 
 binary[binary$Sample %in% "200303_I",]$Timepoint <- gsub(x=binary[binary$Sample %in% "200303_I",]$Timepoint, pattern = "38h", replacement = "38h_C")
+
+
+```
+
+
+
+Next we scale the mean intensities (AU) to fit value between 0 and 1 
+
+```{r,}
+
+raw <- raw %>%
+  mutate(scaled = (Mean - min(Mean)) / (max(Mean) - min(Mean)))
+
+binary <- binary %>%
+  mutate(scaled = (Mean - min(Mean)) / (max(Mean) - min(Mean)))
+
+raw 
 binary
 
 ```
 
-Now we can split the data by timepoint
 
+Now we can split the data by timepoint
 ```{r}
 
 raw_12 <- raw[raw$Timepoint %in% "12h",]
@@ -71,41 +82,49 @@ raw_38C <- raw[raw$Timepoint %in% "38_C",]
 binary_12 <- binary[binary$Timepoint %in% "12h",]
 binary_24 <- binary[binary$Timepoint %in% "24h",]
 binary_38 <- binary[binary$Timepoint %in% "38h",]
-binary_24C <- binary[binary$Timepoint %in% "24_C",]
-binary_38C <- binary[binary$Timepoint %in% "38_C",]
+binary_24C <- binary[binary$Timepoint %in% "24h_C",]
+binary_38C <- binary[binary$Timepoint %in% "38h_C",]
 
 
 ```
+
+
+
 Now we would like to plot the mean intensity of each antigen across the different hotspots comparing the area_type roi and inverse 
 
 ```{r}
 
-p_12h_binary <- ggplot(binary_12, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+p_12h_binary <- ggplot(binary_12, aes(x = Antigen, y = scaled, fill = Area_type)) +
   geom_boxplot() +
-  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
-       x = "Antigen",
-       y = "log10(Mean Intensity)") +
+  geom_jitter(alpha = 0.5, size = 0.8)+ 
+  labs(title = "Mean Intensity in IHS across cell types 12hpi",
+       x = "celltype marker",
+       y = "mean Intensity [AU]") +
   scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
   theme_classic() +
   coord_flip()
 
-p_24h_binary <- ggplot(binary_24, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+p_24h_binary <- ggplot(binary_24, aes(x = Antigen, y = scaled, fill = Area_type)) +
   geom_boxplot() +
-  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
-       x = "Antigen",
-       y = "log10(Mean Intensity)") +
+  geom_jitter(alpha = 0.5, size = 0.8)+ 
+  labs(title = "Mean Intensity in IHS across cell types 24hpi",
+       x = "celltype marker",
+       y = "mean Intensity [AU]") +
   scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
   theme_classic() +
   coord_flip()
 
-p_38h_binary <- ggplot(binary_38, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+p_38h_binary <- ggplot(binary_38, aes(x = Antigen, y = Mean, fill = Area_type)) +
   geom_boxplot() +
-  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
-       x = "Antigen",
-       y = "log10(Mean Intensity)") +
+  geom_jitter(alpha = 0.5, size = 0.8)+ 
+  labs(title = "Mean Intensity in IHS across cell types 38hpi",
+       x = "celltype marker",
+       y = "mean Intensity [AU]") +
   scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
   theme_classic() +
   coord_flip()
+
+
 
 p_12h_binary
 
@@ -113,24 +132,205 @@ p_24h_binary
 
 p_38h_binary
 
-p_24C_binary <- ggplot(binary_24C, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+p_24C_binary <- ggplot(binary_24C, aes(x = Antigen, y = scaled, fill = Area_type)) +
   geom_boxplot() +
-  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
-       x = "Antigen",
-       y = "log10(Mean Intensity)") +
+  geom_jitter(alpha = 0.5, size = 0.8)+ 
+  labs(title = "Mean Intensity in IHS across cell types 24h control",
+       x = "celltype marker",
+       y = "mean Intensity [AU]") +
   scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
   theme_classic() +
   coord_flip()
 
-p_38C_binary <- ggplot(binary_38C, aes(x = Antigen, y = log10(Mean), fill = Area_type)) +
+p_38C_binary <- ggplot(binary_38C, aes(x = Antigen, y = scaled, fill = Area_type)) +
   geom_boxplot() +
-  labs(title = "Mean Intensity Comparison (ROI vs Inverse) for Each Antigen",
-       x = "Antigen",
-       y = "log10(Mean Intensity)") +
+  geom_jitter(alpha = 0.5, size = 0.8)+ 
+  labs(title = "Mean Intensity in IHS across cell types 38h control",
+       x = "celltype marker",
+       y = "mean Intensity [AU]") +
   scale_fill_manual(values = c("cadetblue", "darkorange"), labels = c("encompassing tissue", "IHS")) +
   theme_classic() +
+ 
+  
   coord_flip()
+
+p_24C_binary
+
+p_38C_binary
 
 ```
 
+Now we would like to calculate wether these observed differences are significant and display significance in the plot. 
 
+
+```{r, plot for 12hpi}
+
+library(ggpubr)
+library(rstatix)
+
+stat.test <- binary_12 %>%
+  group_by(Antigen) %>%
+  wilcox_test(scaled ~ Area_type) %>%
+  adjust_pvalue() %>%
+  add_significance("p.adj")
+stat.test
+
+library(ggpubr)
+
+# Your existing code for creating the boxplot
+bxp <- ggboxplot(binary_12, x = "Antigen", y = "scaled", fill = "Area_type", palette = ) +
+  labs(x = "cell type marker", y = "binarized intensity [AU]") +
+  theme(legend.position = "bottom") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), name = "Area type", labels = c("surrounding tissue", "IHS")) +
+  geom_point(aes(fill = Area_type), position = position_jitter(width = 0.2), alpha = 0.5)
+
+# Create a new data frame for p-value annotations
+stat.test <- stat.test %>% add_xy_position(x = "Antigen")
+pvalue_labels <- data.frame(x = stat.test$x, y = rep(1.3, nrow(stat.test)), label = stat.test$p.adj.signif)
+
+# Add p-value annotations using geom_text
+pdf("/Users/franziskahildebrandt/P.Berghei-Liver/res/figures/supplementary/081123_binarized_boxplot_12h.pdf", width = 8, height = 4)
+bxp+ 
+  geom_text(data = pvalue_labels, aes(x = x, y = y, label = label), vjust = 0, hjust = 0.5) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+dev.off()
+```
+
+
+```{r, plot for 24hpi}
+
+library(ggpubr)
+library(rstatix)
+
+stat.test <- binary_24 %>%
+  group_by(Antigen) %>%
+  wilcox_test(scaled ~ Area_type) %>%
+  adjust_pvalue() %>%
+  add_significance("p.adj")
+stat.test
+
+library(ggpubr)
+
+# Your existing code for creating the boxplot
+bxp <- ggboxplot(binary_24, x = "Antigen", y = "scaled", fill = "Area_type", palette = ) +
+  labs(x = "cell type marker", y = "binarized intensity [AU]") +
+  theme(legend.position = "bottom") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), name = "Area type", labels = c("surrounding tissue", "IHS")) +
+  geom_point(aes(fill = Area_type), position = position_jitter(width = 0.2), alpha = 0.5)
+
+# Create a new data frame for p-value annotations
+stat.test <- stat.test %>% add_xy_position(x = "Antigen")
+pvalue_labels <- data.frame(x = stat.test$x, y = rep(1.3, nrow(stat.test)), label = stat.test$p.adj.signif)
+
+# Add p-value annotations using geom_text
+pdf("/Users/franziskahildebrandt/P.Berghei-Liver/res/figures/supplementary/081123_binarized_boxplot_24h.pdf", width = 8, height = 4)
+bxp+ 
+  geom_text(data = pvalue_labels, aes(x = x, y = y, label = label), vjust = 0, hjust = 0.5) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+dev.off()
+```
+
+```{r, plot for 38hpi}
+
+library(ggpubr)
+library(rstatix)
+
+stat.test <- binary_38 %>%
+  group_by(Antigen) %>%
+  wilcox_test(scaled ~ Area_type) %>%
+  adjust_pvalue() %>%
+  add_significance("p.adj")
+stat.test
+
+library(ggpubr)
+
+# Your existing code for creating the boxplot
+bxp <- ggboxplot(binary_38, x = "Antigen", y = "scaled", fill = "Area_type", palette = ) +
+  labs(x = "cell type marker", y = "binarized intensity [AU]") +
+  theme(legend.position = "bottom") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), name = "Area type", labels = c("surrounding tissue", "IHS")) +
+  geom_point(aes(fill = Area_type), position = position_jitter(width = 0.2), alpha = 0.5)
+
+# Create a new data frame for p-value annotations
+stat.test <- stat.test %>% add_xy_position(x = "Antigen")
+pvalue_labels <- data.frame(x = stat.test$x, y = rep(1.3, nrow(stat.test)), label = stat.test$p.adj.signif)
+
+# Add p-value annotations using geom_text
+pdf("/Users/franziskahildebrandt/P.Berghei-Liver/res/figures/supplementary/081123_binarized_boxplot_38h.pdf", width = 8, height = 4)
+bxp+ 
+  geom_text(data = pvalue_labels, aes(x = x, y = y, label = label), vjust = 0, hjust = 0.5) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+dev.off()
+```
+
+
+```{r, plot for 24 control}
+
+library(ggpubr)
+library(rstatix)
+
+stat.test <- binary_24C %>%
+  group_by(Antigen) %>%
+  wilcox_test(scaled ~ Area_type) %>%
+  adjust_pvalue() %>%
+  add_significance("p.adj")
+stat.test
+
+library(ggpubr)
+
+# Your existing code for creating the boxplot
+bxp <- ggboxplot(binary_24C, x = "Antigen", y = "scaled", fill = "Area_type", palette = ) +
+  labs(x = "cell type marker", y = "binarized intensity [AU]") +
+  theme(legend.position = "bottom") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), name = "Area type", labels = c("surrounding tissue", "IHS")) +
+  geom_point(aes(fill = Area_type), position = position_jitter(width = 0.2), alpha = 0.5)
+
+# Create a new data frame for p-value annotations
+stat.test <- stat.test %>% add_xy_position(x = "Antigen")
+pvalue_labels <- data.frame(x = stat.test$x, y = rep(1.3, nrow(stat.test)), label = stat.test$p.adj.signif)
+
+# Add p-value annotations using geom_text
+pdf("/Users/franziskahildebrandt/P.Berghei-Liver/res/figures/supplementary/081123_binarized_boxplot_24h_control.pdf", width = 8, height = 4)
+bxp+ 
+  geom_text(data = pvalue_labels, aes(x = x, y = y, label = label), vjust = 0, hjust = 0.5) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+dev.off()
+```
+
+
+```{r, plot for 38 control}
+
+library(ggpubr)
+library(rstatix)
+
+binary_38C <- binary_38C[order(match(binary_38C$Antigen,c("CD8", "CD4", "DAPI", "F4/80", "CD27", "CD11c", "CD11b") )),]
+
+stat.test <- binary_38C %>%
+  group_by(Antigen) %>%
+  wilcox_test(scaled ~ Area_type) %>%
+  adjust_pvalue() %>%
+  add_significance("p.adj")
+stat.test
+
+library(ggpubr)
+
+# Your existing code for creating the boxplot
+bxp <- ggboxplot(binary_38C,x = "Antigen", 
+               y = "scaled", fill = "Area_type") + 
+  labs(x = "cell type marker", y = "binarized intensity [AU]") +
+  theme(legend.position = "bottom") +
+  scale_fill_manual(values = c("cadetblue", "darkorange"), name = "Area type", labels = c("surrounding tissue", "IHS")) +
+  geom_point(aes(fill = Area_type), position = position_jitter(width = 0.2), alpha = 0.5)
+
+# Create a new data frame for p-value annotations
+stat.test <- stat.test %>% add_xy_position(x = "Antigen")
+pvalue_labels <- data.frame(x = stat.test$x, y = rep(1.3, nrow(stat.test)), label = stat.test$p.adj.signif)
+
+# Add p-value annotations using geom_text
+pdf("/Users/franziskahildebrandt/P.Berghei-Liver/res/figures/supplementary/081123_binarized_boxplot_38h_control.pdf", width =8, height = 4)
+bxp+ 
+  geom_text(data = pvalue_labels, aes(x = x, y = y, label = label), vjust = 0, hjust = 0.5, size = 5) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+dev.off()
+
+```
