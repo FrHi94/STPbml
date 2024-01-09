@@ -1,7 +1,5 @@
 ---
 title: "March23_scmap"
-author: "Miren Urrutia Iturritza"
-date: "`r Sys.Date()`"
 output: html_document
 Description: "Manual cell type annotations/curation"
 ---
