@@ -1,17 +1,11 @@
 ---
 title: "Doublets removal from all sn-seq samples"
-author: "Miren Urrutia Iturritza"
-date: "`r Sys.Date()`"
 output: html_document
 ---
-I have created the 'Doublet_removal' folder, which contains all necessary files 
-for running this code. 
-We can also store the outputs here. 
 
+##Define the working directory
 ```{r, define your working directory (path to github repo), results='hide', message=FALSE}
-
 repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas/"
-
 ```
 
 You might need to install this package. 
@@ -27,10 +21,9 @@ library(DoubletFinder)
 
 You can find below all the steps I took to load the data obtained from 
 cellranger and processed until the seurat objects are created. 
-You can also find the seurat objects saved in the 'Doublet removal' folder, if
-you would prefer to skip to that step directly. 
 
 ```{r, load data with Read10x}
+#Load data all samples 
 #Load Sample 12 data 
 Sample12.data <- Read10X(data.dir = paste0(repo,"data/snseq_original_files/Sample1_12/sample1_filtered_feature_bc_matrix/"))
 #Load Sample 24 data  
@@ -45,14 +38,9 @@ SampleNC2.data <- Read10X(data.dir =paste0(repo,"data/snseq_original_files/Sampl
 Sample24C.data <- Read10X(data.dir =paste0(repo,"data/snseq_original_files/Sample6_24C/sample6_filtered_feature_bc_matrix/"))
 #Load Sample 38C data 
 Sample38C.data <- Read10X(data.dir =paste0(repo,"data/snseq_original_files/Sample7_38C/sample7_raw_feature_bc_matrix/"))
-
 ```
-
-
-Putting the rownames of the dgCMatrix in the correct format.
-(I am not sure this is necessary? I don't see much differences) 
-
-```{r, rownames}
+Formatting the rownames of the dgCMatrix
+```{r, rownames formatting}
 #Sample 12
 ensemble_id_names12 <- rownames(Sample12.data)
 ensemble_id_names12 <- sapply(ensemble_id_names12,
@@ -103,8 +91,7 @@ ensemble_id_names38 <- as.vector(unlist(ensemble_id_names38))
 rownames(Sample38.data) <- ensemble_id_names38
 ```
 
-We already have the annotation file ("mus_pb_annotation_seurat.tsv").
-Here, we select only the annotations from the file that are not filled with NA.
+The annotation file is "mus_pb_annotation_seurat.tsv".
 ```{r, Prepare annotation files}
 # Select only the annotations that are not NA
 mus_pb_annotation <- read.table(paste0(repo,"annotation/mus_pb_annotation_seurat.tsv", 
@@ -126,7 +113,6 @@ genes <- as.vector(genes[!(duplicated(extract))])
 ```
 
 ```{r, Keep only the Ensembl IDs that are present in both matrices}
-
 # Keep only the rows that have an Ensembl ID in the "extract" vector 
 # and which are present in the count matrix. 
 
@@ -235,15 +221,6 @@ cellnumberS12C <- table(Idents(Sample12C.seurat))
 cellnumberSNC2 <- table(Idents(SampleNC2.seurat))
 cellnumberS24C <- table(Idents(Sample24C.seurat))
 cellnumberS38C <- table(Idents(Sample38C.seurat))
-
-cellnumberS12
-cellnumberS24
-cellnumberS38
-cellnumberS12C 
-cellnumberSNC2
-cellnumberS24C
-cellnumberS38C
-
 ```
 
 ```{r, Calculate number of mitochondrial, ribosomal, and Plasmodium genes}
@@ -304,8 +281,6 @@ Sample38C.seurat[["Percent.ribosomal"]] <-
   PercentageFeatureSet(Sample38C.seurat, pattern = '^Rp[sl]')
 Sample38C.seurat[["Percent.pb"]] <- 
   PercentageFeatureSet(Sample38C.seurat, pattern = "-pb")
-
-
 ```
 
 Visualise the calculated number of genes, prior to trimming 
@@ -359,28 +334,6 @@ Sample38C_seurat <- subset(Sample38C.seurat,
                                      Percent.mito < 10)
 
 ```
-
-```{r, Calculate new number of cells per sample}
-
-cells_Sample12_after_filtering <- table(Idents(Sample12_seurat))
-cells_Sample24_after_filtering <- table(Idents(Sample24_seurat))
-cells_Sample38_after_filtering <- table(Idents(Sample38_seurat))
-cells_Sample12C_after_filtering <- table(Idents(Sample12C_seurat))
-cells_SampleNC2_after_filtering <- table(Idents(SampleNC2_seurat))
-cells_Sample24C_after_filtering <- table(Idents(Sample24C_seurat))
-cells_Sample38C_after_filtering <- table(Idents(Sample38C_seurat))
-
-cells_Sample12_after_filtering
-cells_Sample24_after_filtering
-cells_Sample38_after_filtering
-cells_Sample12C_after_filtering
-cells_SampleNC2_after_filtering
-cells_SampleNC2_after_filtering
-cells_Sample24C_after_filtering
-cells_Sample38C_after_filtering
-
-```
-
 
 ```{r,Plot post-filtering samples}
 # Change 'Sample12.seurat' with the name of any of the other samples. 
@@ -518,13 +471,10 @@ Plot to see that the removal of genes has gone well
 VlnPlot(Sample12_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
 VlnPlot(Sample24_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
 VlnPlot(Sample38_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
-
 VlnPlot(Sample12C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
-
 VlnPlot(Sample24C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
 VlnPlot(Sample38C_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
 VlnPlot(SampleNC2_seurat, group.by = "orig.ident",raster = FALSE, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 5)
-
 ```
 
 Here, we start with the process of removing the Doublets.
@@ -545,6 +495,7 @@ Sample12_seurat <- RunUMAP(Sample12_seurat, dims = 1:10)
 
 DimPlot(Sample12_seurat)
 FeaturePlot(Sample12_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+
 #Sample 24
 Sample24_seurat <- NormalizeData(Sample24_seurat)
 Sample24_seurat <- FindVariableFeatures(Sample24_seurat,
@@ -556,6 +507,7 @@ Sample24_seurat <- RunUMAP(Sample24_seurat, dims = 1:10)
 
 DimPlot(Sample24_seurat)
 FeaturePlot(Sample24_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
+
 #Sample 38
 Sample38_seurat <- NormalizeData(Sample38_seurat)
 Sample38_seurat <- FindVariableFeatures(Sample38_seurat,
@@ -615,11 +567,7 @@ Sample38C_seurat <- RunPCA(Sample38C_seurat)
 Sample38C_seurat <- RunUMAP(Sample38C_seurat, dims = 1:10)
 DimPlot(Sample38C_seurat)
 FeaturePlot(Sample38C_seurat, features = c("nFeature_RNA", "nCount_RNA", "Percent.mito", "Percent.ribosomal", "Percent.pb"), ncol = 3)
-
 ```
-
-
-
 
 B) Follow example from NBIS [tutorial](https://nbisweden.github.io/workshop-scRNAseq/labs/compiled/seurat/seurat_01_qc.html#Predict_doublets)
 
@@ -685,11 +633,6 @@ ggplot(bcmvn_Sample38C, aes(x = pK, y = BCmetric)) +
 
 ```
 
-
-
-I think the best pK value is 0.24
-We expect ~7.6% of doublets
-I have not been able to go past this step because of lack of memory
 ```{r, define expected number of doublet cells}
 #Sample 12
 nExp12 <- round(ncol(Sample12_seurat) * 0.076)
@@ -849,30 +792,4 @@ nse_38C =
 
 ```
 
-Save all filtered seurat objects with doublets removed, individually and merged. 
-They can be found in the folder
-nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/seurat/
-```{r, save seurat objects}
-# As individual
-saveRDS(nse_12, 
-        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_12_singlets.RDS")
-
-saveRDS(nse_24, 
-        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_24_singlets.RDS")
-
-saveRDS(nse_38, 
-        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_38_singlets.RDS")
-
-saveRDS(nse_12C, 
-        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_12C_singlets.RDS")
-
-saveRDS(nse_NC2, 
-        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_NC2_singlets.RDS")
-
-saveRDS(nse_24C, 
-        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_24C_singlets.RDS")
-
-saveRDS(nse_38C, 
-        file = "/home/st-analysis_home/franziska.hildebra/sn_Plasmodium/nucSeq_pb_liver_1222/Doublet_removal/Seurat_objects/Seurat_singlets/nse_38C_singlets.RDS")
-
-```
+Save all filtered seurat objects with doublets removed, individually and merged.
