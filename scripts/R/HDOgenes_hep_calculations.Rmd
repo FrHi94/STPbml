@@ -5,33 +5,23 @@ date: "2023-06-07"
 output: html_document
 ---
 
-## Setting everything up
-```{r setup, include=FALSE}
-#Setting the working directory
-setwd("/corgi/miren/snseq_Ghent/cell_type_annotation/hepatocyte_annotation/new_cluster_annotation")
-```
-
 ```{r install packages, include=FALSE}
 library(scmap)
 library(SingleCellExperiment)
 
-set.seed(2023)
 ```
 
 ```{r Load reference data set, include=FALSE}
 # Load reference data (the data that is already annotated)
 sce_hepatocytes_MM <- readRDS("/corgi/miren/snseq_Ghent/cell_type_annotation/hepatocyte_annotation/new_cluster_annotation/sce_new_cluster_hepatocyte_annotation_20230614.RDS")
 
-
-
-#Format as desired
+#Format
 rowData(sce_hepatocytes_MM)$feature_symbol <- rownames(sce_hepatocytes_MM)
 colData(sce_hepatocytes_MM)$cell_type1 <- sce_hepatocytes_MM@colData$ident
-
-
 ```
 
 ```{r trainset and testset}
+#Split reference dataset into 2 (training set and testing set)
 set.seed(2023)
 test_sce_hepatocytes_MM <- sce_hepatocytes_MM[,sample(colnames(sce_hepatocytes_MM), size = ncol(sce_hepatocytes_MM)/5)]
 
