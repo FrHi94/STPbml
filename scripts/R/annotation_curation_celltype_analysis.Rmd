@@ -1,7 +1,5 @@
 ---
 title: "March23_scmap"
-author: "Miren Urrutia Iturritza"
-date: "`r Sys.Date()`"
 output: html_document
 Description: "Manual cell type annotations/curation"
 ---
@@ -56,6 +54,7 @@ snseq_data[[]]
 DimPlot(snseq_data, reduction = "umap", group.by = 'seurat_clusters', label=TRUE, raster = F)
 DimPlot(snseq_data, reduction = "umap", group.by = 'celltype_scmap', label=TRUE, raster = F)
 DimPlot(snseq_data, reduction = "umap", split.by = 'orig.ident', label=TRUE, raster = F)
+
 #From the automated annotations we can annotate clusters 3, 6, 7, 8 and 16, 14 as well as 0,1 and 4 safely
 snseq_data$curated_celltype <- ifelse(snseq_data$seurat_clusters %in% c(7,3), "Endothelial cells", 
                                       ifelse(snseq_data$seurat_clusters %in% c(0, 1, 15,12), "Hepatocytes", 
@@ -67,12 +66,9 @@ snseq_data$curated_celltype <- ifelse(snseq_data$seurat_clusters %in% c(7,3), "E
 DimPlot(snseq_data, reduction = "umap", group.by = 'curated_celltype', label=TRUE, raster = F)
 DimPlot(snseq_data, reduction = "umap", group.by = 'seurat_clusters', label=TRUE, raster = F)
 
-#annotations to be done for: 2,5,9,10,12, 13
-#potentially subcluster cluster 5 as it is associated with more than one immune cell type 
-
 ```
 
-## Now, I go cluster by cluster trying to identify which cell types cluster there
+##Examine cluster by cluster trying to identify cell type clusters 
 ```{r cluster 2}
 #Find conserved markers
 markers_cluster2 <-FindConservedMarkers(snseq_data, ident.1 = 2, grouping.var = "orig.ident")
@@ -143,7 +139,7 @@ colnames(celltype_cluster6) <- c("cell_type1", "mean_cluster6")
 #Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
 celltype_cluster6[order(-celltype_cluster6$mean_cluster6), ]
 
-#It looks like this gene is highly-representatives of Hepatocytes
+#It looks like this gene is highly-representatives in pericentral hepatocytes
 
 #rename cluster 6 cells
 snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 6] <- "pericentral Hepatocytes"
@@ -224,7 +220,7 @@ colnames(celltype_cluster13) <- c("cell_type1", "mean_cluster13")
 #Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
 celltype_cluster13[order(-celltype_cluster13$mean_cluster13), ]
 
-#It looks like this gene is highly-representatives of a bunch of different immune cells in that cluster so we might have to subcluster this one as well - potentially together with cluster5!
+#It looks like this gene is highly-representatives of immune cells such as T & NK cells
 
 #rename cluster 13 cells
 snseq_data$merged_type[snseq_data$seurat_clusters %in% 13] <- "T & NK cells"
@@ -237,85 +233,6 @@ DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
 ```
 
 
-```{r cluster 15}
-#Find conserved markers
-markers_cluster15 <-FindConservedMarkers(snseq_data, ident.1 = 15, grouping.var = "orig.ident")
-
-#Check conserved markers
-markers_cluster15
-
-#Visualise the top gene
-FeaturePlot(snseq_data, features = rownames(markers_cluster15[c(1:10),]), min.cutoff = 'q10')
-
-#Identify in which cell type this gene is the most expressed:
-
-#Extract the expression values for the gene of interest 
-sce_counts <- assay(sce_liver_stst, "counts")
-cluster15_counts <- sce_counts[rownames(markers_cluster15[c(1),]), ]
-
-#Calculate the average expression of the gene of interest across all cells
-cluster15_counts_matrix <- as.matrix(cluster15_counts)
-cluster15_avg <- rowMeans(cluster15_counts_matrix)
-
-#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
-colData(sce_liver_stst)$cluster15_avg <- cluster15_avg
-
-#Calculate the mean expression of the gene of interest for each cell type
-celltype_cluster15 <- aggregate(sce_liver_stst@colData[, "cluster15_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
-colnames(celltype_cluster15) <- c("cell_type1", "mean_cluster15")
-
-#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
-celltype_cluster15[order(-celltype_cluster15$mean_cluster15), ]
-
-#It looks like this gene is highly-representatives of a bunch of different immune cells in that cluster so we might have to subcluster this one as well - potentially together with cluster5!
-
-#rename cluster 15 cells
-snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 15] <- "Y"
-
-#Visualise
-DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
-
-```
-
-```{r cluster 16}
-#Find conserved markers
-markers_cluster16 <-FindConservedMarkers(snseq_data, ident.1 = 16, grouping.var = "orig.ident")
-
-#Check conserved markers
-markers_cluster16
-
-#Visualise the top gene
-FeaturePlot(snseq_data, features = rownames(markers_cluster16[c(1:5),]), min.cutoff = 'q16')
-
-#Identify in which cell type this gene is the most expressed:
-
-#Extract the expression values for the gene of interest 
-sce_counts <- assay(sce_liver_stst, "counts")
-cluster16_counts <- sce_counts[rownames(markers_cluster16[1,]), ]
-
-#Calculate the average expression of the gene of interest across all cells
-cluster16_counts_matrix <- as.matrix(cluster16_counts)
-cluster16_avg <- rowMeans(cluster16_counts_matrix)
-
-#Add the average expression of the gene of interest as a column to the cell metadata table in the SingleCellExperiment object
-colData(sce_liver_stst)$cluster16_avg <- cluster16_avg
-
-#Calculate the mean expression of the gene of interest for each cell type
-celltype_cluster16 <- aggregate(sce_liver_stst@colData[, "cluster16_avg", drop=FALSE], by = list(sce_liver_stst@colData$cell_type1), FUN = mean)
-colnames(celltype_cluster16) <- c("cell_type1", "mean_cluster16")
-
-#Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
-celltype_cluster16[order(-celltype_cluster16$mean_cluster16), ]
-
-#It looks like this gene is highly-representatives of a bunch of different immune cells in that cluster so we might have to subcluster this one as well - potentially together with cluster5!
-
-#rename cluster 16 cells
-snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 16] <- "X"
-
-#Visualise
-DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
-
-```
 
 ```{r cluster 17}
 #Find conserved markers
@@ -347,7 +264,7 @@ colnames(celltype_cluster17) <- c("cell_type1", "mean_cluster17")
 #Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
 celltype_cluster17[order(-celltype_cluster17$mean_cluster17), ]
 
-#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+#It looks like a mix of endothelial cells and ILCs/T cells
 #rename cluster 17 cells
 snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 17] <- "Endothelial cells"
 
@@ -387,7 +304,6 @@ colnames(celltype_cluster19) <- c("cell_type1", "mean_cluster19")
 #Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
 celltype_cluster19[order(-celltype_cluster19$mean_cluster19), ]
 
-#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
 #rename cluster 19 cells
 snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 19] <- "B cell"
 
@@ -427,7 +343,7 @@ colnames(celltype_cluster20) <- c("cell_type1", "mean_cluster20")
 #Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
 celltype_cluster20[order(-celltype_cluster20$mean_cluster20), ]
 
-#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+
 #rename cluster 20 cells
 snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 20] <- "Hep/HsPC"
 
@@ -467,9 +383,9 @@ colnames(celltype_cluster21) <- c("cell_type1", "mean_cluster21")
 #Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
 celltype_cluster21[order(-celltype_cluster21$mean_cluster21), ]
 
-#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+
 #rename cluster 21 cells
-snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 21] <- "Fibro_2"
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 21] <- "Fibroblasts"
 
 #Visualise
 DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
@@ -507,9 +423,9 @@ colnames(celltype_cluster22) <- c("cell_type1", "mean_cluster22")
 #Sort the resulting data frame by mean expression to see which cell types have the highest expression of your gene of interest
 celltype_cluster22[order(-celltype_cluster22$mean_cluster22), ]
 
-#It looks like a mix of endothelial cells and ILCs/T cells -> using more markers and maybe splitting the data could help! 
+
 #rename cluster 22 cells
-snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 22] <- "Endo_sub2"
+snseq_data$curated_celltype[snseq_data$seurat_clusters %in% 22] <- "Endothelial cells"
 
 #Visualise
 DimPlot(snseq_data, group.by = "curated_celltype", raster = F)
