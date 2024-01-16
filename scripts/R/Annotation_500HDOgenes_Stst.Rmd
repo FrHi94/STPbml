@@ -1,3 +1,5 @@
+This script contains the second step carried out to annotate the cells from the single-nuclei sequencing data.  Here, we use the scmapCell methods for projecting the labels from the reference dataset onto our own single-nuclei sequencing data.
+
 #Load required libraries
 library(scmap)
 library(SingleCellExperiment)
