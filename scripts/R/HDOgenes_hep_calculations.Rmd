@@ -1,9 +1,10 @@
 ---
 title: "HDO genes hepatocytes"
-author: "Miren Urrutia Iturritza"
 date: "2023-06-07"
 output: html_document
 ---
+
+This script contains the first step carried out to annotate the cells from the single-nuclei sequencing data. Here, we use the selectFreatures function to find the 500 feature genes that we later used for annotating the cell type.
 
 ```{r install packages, include=FALSE}
 library(scmap)
