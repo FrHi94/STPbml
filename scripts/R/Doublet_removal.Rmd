@@ -3,6 +3,8 @@ title: "Doublets removal from all sn-seq samples"
 output: html_document
 ---
 
+Initial processing of sequencing data (Annotation of genes, removal of mitochondrial and ribosomal genes, filtering of cells with low number of counts, normlaise and transform the data, remove doublets).
+
 ##Define the working directory
 ```{r, define your working directory (path to github repo), results='hide', message=FALSE}
 repo <- "/Users/franziskahildebrandt/P.Berghei-Liver/spatiotemporal_Pbliver_atlas/"
